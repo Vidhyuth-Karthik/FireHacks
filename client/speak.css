@@ -465,6 +465,10 @@
   color: var(--signal);
 }
 
+.trace__line[data-kind="heard"] {
+  color: var(--gold-300);
+}
+
 /* ---- Utterance bar --------------------------------------- */
 
 .utterance {

@@ -1,23 +1,23 @@
-# AI endpoints, backed by Featherless AI (serverless open-model inference).
+# AI endpoints, backed by Azure OpenAI (Responses API).
 #
 # Two functions, matching the Step-0 contract the team froze:
 #   predict_options(context) -> [str]   the 8 things this person might
 #                                       want to say right now
 #   expand(selection, context) -> str   that intent as a full sentence
 #
-# Featherless is OpenAI-compatible, so this is a plain chat-completions
-# call with a different base URL. Configure with FEATHERLESS_API_KEY and
-# FEATHERLESS_MODEL - see .env.example.
+# Configure with AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT (the full
+# .../openai/v1/responses URL for your resource) and AZURE_OPENAI_DEPLOYMENT
+# - see .env.example.
 #
 # IMPORTANT - reasoning models are slow, and this runs as a Vercel
 # serverless function with (by default) a 10s execution limit.
-# The default model is a plain instruct model (~2-4s/prediction) for
-# that reason. Reasoning models - DeepSeek-R1 distills, QwQ, etc. -
-# "think out loud" before answering: the R1-14B distill measured ~19-34s,
-# QwQ-32B ~40s. Both will time out as a Vercel function unless you migrate
-# vercel.json off the legacy builds/routes format to set a longer
-# maxDuration. /expand defaults to a template regardless, since it sits
-# on the press-to-speak path where even a fast model's latency is too
+# Plain instruct deployments (gpt-4o-mini and similar) measure ~2-4s per
+# prediction, which is why that's the expected deployment target here.
+# Reasoning models "think out loud" before answering and can take 20-40s+,
+# which will time out as a Vercel function unless you migrate vercel.json
+# off the legacy builds/routes format to set a longer maxDuration.
+# /expand defaults to a template regardless, since it sits on the
+# press-to-speak path where even a fast model's latency is too
 # slow - pass use_model=true there only if you've solved the timeout.
 
 import json
@@ -34,12 +34,10 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 # ---- Configuration -------------------------------------------------
 
-FEATHERLESS_BASE_URL = os.environ.get(
-    "FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1"
-).rstrip("/")
-FEATHERLESS_API_KEY = os.environ.get("FEATHERLESS_API_KEY", "")
-FEATHERLESS_MODEL = os.environ.get("FEATHERLESS_MODEL", "Qwen/Qwen2.5-14B-Instruct")
-FEATHERLESS_TIMEOUT = float(os.environ.get("FEATHERLESS_TIMEOUT", "90"))
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
+AZURE_OPENAI_TIMEOUT = float(os.environ.get("AZURE_OPENAI_TIMEOUT", "90"))
 
 OPTION_COUNT = 8
 
@@ -76,6 +74,12 @@ class Context(BaseModel):
     common_needs: str = ""
     recent: List[str] = []
     rejected: List[str] = []
+    # Recent room speech transcribed via the mic (client/mic.js), most
+    # recent last - a tie-breaker signal, same spirit as `recent`.
+    heard: List[str] = []
+    # Optional device sensors. Tie-breakers only - see build_context_line.
+    temperature_f: Optional[float] = None
+    light_lux: Optional[float] = None
 
 
 class PredictRequest(BaseModel):
@@ -88,53 +92,71 @@ class ExpandRequest(BaseModel):
     use_model: bool = False  # opt in to the slow, good path
 
 
-# ---- Featherless client --------------------------------------------
+# ---- Azure OpenAI client --------------------------------------------
+
+
+def extract_output_text(data: dict) -> str:
+    """Pull the text out of a Responses API payload.
+
+    The API offers a convenience `output_text` string; when that's absent
+    (or empty) fall back to walking the `output` array of message items,
+    each holding one or more content parts.
+    """
+    text = data.get("output_text")
+    if isinstance(text, str) and text.strip():
+        return text
+
+    parts = []
+    for item in data.get("output") or []:
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content") or []:
+            if content.get("type") in ("output_text", "text") and content.get("text"):
+                parts.append(content["text"])
+    return "".join(parts)
 
 
 async def chat(system: str, user: str, max_tokens: int = 900) -> str:
-    """One chat completion against Featherless. Returns raw content."""
-    if not FEATHERLESS_API_KEY:
-        raise HTTPException(status_code=503, detail="FEATHERLESS_API_KEY is not set.")
+    """One Responses API call against Azure OpenAI. Returns the model's text."""
+    if not (AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT):
+        raise HTTPException(
+            status_code=503,
+            detail="Azure OpenAI is not configured (AZURE_OPENAI_API_KEY / "
+            "AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_DEPLOYMENT).",
+        )
 
     payload = {
-        "model": FEATHERLESS_MODEL,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.7,
+        "model": AZURE_OPENAI_DEPLOYMENT,
+        "instructions": system,
+        "input": user,
+        "max_output_tokens": max_tokens,
+        # No sampling `temperature` here - some deployments reject it on
+        # the Responses surface, and it's unrelated to the room-temperature
+        # sensor value that also flows through this router.
     }
 
     try:
-        async with httpx.AsyncClient(timeout=FEATHERLESS_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=AZURE_OPENAI_TIMEOUT) as client:
             response = await client.post(
-                f"{FEATHERLESS_BASE_URL}/chat/completions",
+                AZURE_OPENAI_ENDPOINT,
                 headers={
-                    "Authorization": f"Bearer {FEATHERLESS_API_KEY}",
+                    "Authorization": f"Bearer {AZURE_OPENAI_API_KEY}",
                     "Content-Type": "application/json",
-                    # Featherless sits behind Cloudflare, which blocks some
-                    # default client user-agents with "error code: 1010".
-                    "User-Agent": "whisper-aac/1.0",
                 },
                 json=payload,
             )
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="The model took too long to respond.")
     except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Could not reach Featherless.")
+        raise HTTPException(status_code=502, detail="Could not reach Azure OpenAI.")
 
     if response.status_code >= 400:
         raise HTTPException(
             status_code=502,
-            detail=f"Featherless error ({response.status_code}): {response.text[:200]}",
+            detail=f"Azure OpenAI error ({response.status_code}): {response.text[:200]}",
         )
 
-    data = response.json()
-    message = data["choices"][0]["message"]
-    # Some models put the chain of thought in a separate field, most of
-    # the R1 distills just inline it in content.
-    return message.get("content") or message.get("reasoning_content") or ""
+    return extract_output_text(response.json())
 
 
 def strip_reasoning(text: str) -> str:
@@ -194,12 +216,44 @@ Return ONLY a JSON array of exactly {OPTION_COUNT} strings, in this fixed order:
 (light/sound/TV), 8 a reassuring "nothing needed" closer.
 
 Each string is 1-4 words, plain, dignified, first person where natural.
-No numbering, no explanation, no markdown outside the JSON array."""
+No numbering, no explanation, no markdown outside the JSON array.
+
+The context line may include what was recently overheard in the room and
+the temperature/light. Treat both as gentle tie-breakers only, never the
+main basis for a slot - e.g. a cold room can nudge slot 3 toward
+"too cold", overheard talk of food can nudge slot 2. The fixed 8-slot
+order above always wins over anything overheard."""
 
 EXPAND_SYSTEM = """You help a non-verbal person speak.
 Turn their chosen short intent into ONE natural, polite, dignified sentence
 in their own voice. First person. Under 20 words. No preamble.
 Reply with ONLY the sentence in double quotes."""
+
+
+def temp_word(fahrenheit: Optional[float]) -> str:
+    if fahrenheit is None:
+        return "unknown"
+    if fahrenheit <= 58:
+        return "cold"
+    if fahrenheit <= 66:
+        return "cool"
+    if fahrenheit <= 76:
+        return "comfortable"
+    if fahrenheit <= 84:
+        return "warm"
+    return "hot"
+
+
+def light_word(lux: Optional[float]) -> str:
+    if lux is None:
+        return "unknown"
+    if lux < 40:
+        return "dark"
+    if lux < 200:
+        return "dim"
+    if lux < 600:
+        return "indoor light"
+    return "bright"
 
 
 def build_context_line(context: Context) -> str:
@@ -211,6 +265,15 @@ def build_context_line(context: Context) -> str:
     if context.rejected:
         # This is the personalisation signal - what they just said "no" to.
         parts.append(f"just rejected (avoid these)={', '.join(context.rejected[-4:])}")
+    if context.heard:
+        # What the mic overheard in the room - a tie-breaker signal, same
+        # spirit as `recent`, not the primary basis for a prediction.
+        parts.append(f"recently overheard in the room={', '.join(context.heard[-4:])}")
+    if context.temperature_f is not None or context.light_lux is not None:
+        parts.append(
+            f"environment=temperature {temp_word(context.temperature_f)}, "
+            f"light {light_word(context.light_lux)}"
+        )
     return "; ".join(parts)
 
 
@@ -222,9 +285,9 @@ def ping():
     """Health check - reports config without leaking the key."""
     return {
         "message": "AI router is wired up and ready.",
-        "provider": "featherless",
-        "model": FEATHERLESS_MODEL,
-        "key_configured": bool(FEATHERLESS_API_KEY),
+        "provider": "azure-openai",
+        "model": AZURE_OPENAI_DEPLOYMENT,
+        "key_configured": bool(AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT),
     }
 
 
@@ -244,7 +307,7 @@ async def predict(request: PredictRequest):
         return {
             "options": FALLBACK_OPTIONS.get(context.part_of_day, FALLBACK_OPTIONS["afternoon"]),
             "source": "fallback",
-            "model": FEATHERLESS_MODEL,
+            "model": AZURE_OPENAI_DEPLOYMENT,
         }
 
     options = [str(option).strip() for option in options if str(option).strip()]
@@ -258,7 +321,7 @@ async def predict(request: PredictRequest):
         if candidate not in options:
             options.append(candidate)
 
-    return {"options": options, "source": "model", "model": FEATHERLESS_MODEL}
+    return {"options": options, "source": "model", "model": AZURE_OPENAI_DEPLOYMENT}
 
 
 @router.post("/expand")
@@ -285,7 +348,7 @@ async def expand(request: ExpandRequest):
     if not sentence:
         return {"text": template_expand(selection), "source": "fallback"}
 
-    return {"text": sentence, "source": "model", "model": FEATHERLESS_MODEL}
+    return {"text": sentence, "source": "model", "model": AZURE_OPENAI_DEPLOYMENT}
 
 
 # Bare nouns don't survive a generic template ("I would like bathroom"),
