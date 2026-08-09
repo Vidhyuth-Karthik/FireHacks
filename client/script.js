@@ -94,13 +94,13 @@ if (userIdDisplay) {
       userIdDisplay.textContent = data.user_id;
     })
     .catch(() => {
-      window.location.href = "/index.html";
+      window.location.href = "/login.html";
     });
 }
 
 if (logoutButton) {
   logoutButton.addEventListener("click", async () => {
     await fetch(API_BASE_URL + "/api/auth/logout", { method: "POST", credentials: "include" });
-    window.location.href = "/index.html";
+    window.location.href = "/login.html";
   });
 }

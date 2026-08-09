@@ -3,41 +3,137 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log In - Hackathon Starter Kit</title>
+  <title>Whisper — a voice for the smallest movement</title>
+  <meta name="description" content="Whisper turns one residual movement into a full spoken sentence. ESP32 joystick, agentic prediction, browser speech.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0807'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23edb46a'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="auth-card">
-    <h1>Hackathon Starter Kit</h1>
 
-    <div class="tabs">
-      <button type="button" class="tab-button active" data-tab="login">Log In</button>
-      <button type="button" class="tab-button" data-tab="signup">Sign Up</button>
-    </div>
+  <!-- Fixed behind everything. Degrades to warm black if the CDN is unreachable. -->
+  <div class="backdrop">
+    <video
+      class="backdrop__video"
+      autoplay muted loop playsinline
+      preload="auto"
+      aria-hidden="true"
+      data-bg-video>
+      <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_171521_25968ba2-b594-4b32-aab7-f6b69398a6fa.mp4" type="video/mp4">
+    </video>
+    <div class="backdrop__scrim"></div>
+  </div>
 
-    <form id="login-form" class="tab-panel">
-      <label for="login-user-id">User ID</label>
-      <input type="text" id="login-user-id" required autocomplete="username">
+  <div class="shell">
 
-      <label for="login-password">Password</label>
-      <input type="password" id="login-password" required autocomplete="current-password">
+    <header class="topbar">
+      <span class="wordmark">Whisper</span>
+      <span class="topbar__meta">FireHacks 2026 — ESP32 / FastAPI / Turso / Featherless</span>
+    </header>
 
-      <button type="submit">Log In</button>
-    </form>
+    <main class="hero">
+      <!-- ParticleText mounts here. Hover scatters and re-gathers the word. -->
+      <h1 class="hero__title" data-particle-title>
+        <span class="sr-only">Whisper</span>
+      </h1>
 
-    <form id="signup-form" class="tab-panel hidden">
-      <label for="signup-user-id">User ID</label>
-      <input type="text" id="signup-user-id" required autocomplete="username">
+      <p class="hero__lede">
+        A joystick, four directions, and a press. Whisper reads the smallest
+        movement a person can still make and turns it into a full sentence,
+        spoken out loud — <em>and it gets better every time it guesses wrong.</em>
+      </p>
 
-      <label for="signup-password">Password</label>
-      <input type="password" id="signup-password" required autocomplete="new-password">
+      <div class="hero__actions">
+        <a class="cta" href="speak.html">
+          Open the speaker
+          <span class="cta__arrow" aria-hidden="true">&#8594;</span>
+        </a>
+        <p class="hero__note">
+          Runs with no hardware attached — arrow keys drive the same loop.
+        </p>
+      </div>
+    </main>
 
-      <button type="submit">Create Account</button>
-    </form>
+    <!-- Film credits, not a feature grid. Hairlines, no cards, no icons. -->
+    <section class="sequence" aria-label="How it works">
+      <article class="step">
+        <p class="step__index">01</p>
+        <h2 class="step__name">Nudge</h2>
+        <p class="step__body">
+          One residual movement — a thumb, a chin, whatever still works — steps
+          through eight options laid out the way the joystick is.
+        </p>
+      </article>
 
-    <p id="message" class="message"></p>
-  </main>
+      <article class="step">
+        <p class="step__index">02</p>
+        <h2 class="step__name">Predict</h2>
+        <p class="step__body">
+          Profile, time of day and recent phrases narrow everything a person
+          might want to say down to the eight they probably mean right now.
+        </p>
+      </article>
 
-  <script src="script.js"></script>
+      <article class="step">
+        <p class="step__index">03</p>
+        <h2 class="step__name">Speak</h2>
+        <p class="step__body">
+          A press expands the chosen intent into a natural sentence in their
+          own register, and the browser says it aloud.
+        </p>
+      </article>
+
+      <article class="step">
+        <p class="step__index">04</p>
+        <h2 class="step__name">Learn</h2>
+        <p class="step__body">
+          A wrong guess, corrected with a single nudge, is written back and
+          reshapes what comes next. Every rejection is training data.
+        </p>
+      </article>
+    </section>
+
+    <footer class="footline">
+      Built for people whose voice outlasts their movement.
+    </footer>
+
+  </div>
+
+  <script type="module">
+    import { mountParticleText } from './particle-text.js';
+
+    const title = document.querySelector('[data-particle-title]');
+    if (title) {
+      title.innerHTML = '';
+      mountParticleText(title, {
+        text: 'WHISPER',
+        trigger: 'hover',        // pointer entry blows it apart and re-forms
+        color: '#fbf3e6',        // --haze-50
+        highlightColor: '#edb46a', // --gold-300, never the component's violet
+        particleSize: 2,
+        density: 3,
+        scatter: 220,
+        gatherDuration: 1700,
+        stagger: 520,
+        pointerRepel: 46,
+        repelRadius: 140,
+        idleDrift: 0.55,
+        fontSize: 'clamp(3.4rem, 13vw, 9rem)',
+        fontWeight: 300,
+        fontFamily: '"Cormorant Garamond", Georgia, serif',
+        glow: true,
+      });
+    }
+
+    // Honour reduced motion for the background video too.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('[data-bg-video]').forEach((v) => v.pause());
+    }
+  </script>
+
 </body>
 </html>

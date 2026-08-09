@@ -1,102 +1,406 @@
-* {
+/* ============================================================
+   Whisper — tokens, shell, landing page
+   Palette sampled from the golden-hour cliff still.
+   No purple, no glassmorphism, no drop shadows. See UI-SPEC.md.
+   ============================================================ */
+
+/* ---- Tokens ---------------------------------------------- */
+
+:root {
+  /* Warm near-black through cloud cream */
+  --ink-900: #0a0807;
+  --ink-800: #131010;
+  --ink-700: #1e1815;
+  --umber-600: #2f231a;
+  --umber-500: #4a3524;
+  --ember-400: #c8762f;
+  --ember-300: #e0964a;
+  --gold-300: #edb46a;
+  --gold-200: #f4cd92;
+  --haze-100: #f6e6cd;
+  --haze-50: #fbf3e6;
+
+  /* The laptop screen. Reserved for live/selected state only. */
+  --signal: #9fc4e8;
+  --moss: #46523c;
+
+  --font-display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Public Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --rule: 1px solid var(--umber-600);
+
+  --shell-x: clamp(1.5rem, 5vw, 5rem);
+}
+
+/* ---- Reset ----------------------------------------------- */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f4f5f7;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--ink-900);
+  color: var(--haze-100);
+  font-family: var(--font-ui);
+  font-weight: 300;
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.auth-card {
-  background: #ffffff;
-  padding: 2.5rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  width: 100%;
-  max-width: 360px;
+h1,
+h2,
+h3,
+p,
+figure {
+  margin: 0;
 }
 
-h1 {
-  margin-top: 0;
-  font-size: 1.4rem;
-  text-align: center;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-.tabs {
-  display: flex;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid #e2e2e2;
-}
-
-.tab-button {
-  flex: 1;
-  padding: 0.6rem;
+button {
+  font: inherit;
+  color: inherit;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
   cursor: pointer;
-  font-size: 1rem;
-  color: #888;
 }
 
-.tab-button.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
 }
 
-.tab-panel.hidden {
-  display: none;
+/* ---- Shared atoms ---------------------------------------- */
+
+/* Tracked mono caps. Every label in the product uses this. */
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ember-300);
 }
 
-label {
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- ParticleText (from the component's own stylesheet) --- */
+
+.particle-text {
+  position: relative;
   display: block;
-  margin: 0.75rem 0 0.25rem;
-  font-size: 0.9rem;
-  color: #444;
-}
-
-input {
   width: 100%;
-  padding: 0.6rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 1rem;
+  height: 100%;
+  min-height: 240px;
+  overflow: hidden;
+  touch-action: none;
+  isolation: isolate;
 }
 
-button[type="submit"],
-#logout-button {
+.particle-text__canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
-  margin-top: 1.5rem;
-  padding: 0.7rem;
-  border: none;
-  border-radius: 6px;
-  background: #2563eb;
-  color: white;
-  font-size: 1rem;
-  cursor: pointer;
+  height: 100%;
 }
 
-button[type="submit"]:hover,
-#logout-button:hover {
-  background: #1d4ed8;
+.particle-text__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.message {
-  margin-top: 1rem;
-  text-align: center;
+/* ---- Background video shell ------------------------------ */
+/* Fixed behind everything. Two scrims: a bottom-up warm gradient
+   for text legibility and a flat wash for overall contrast.
+   If the video 404s this degrades to warm black, still readable. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--ink-900);
+  overflow: hidden;
+}
+
+.backdrop__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.backdrop__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      to top,
+      var(--ink-900) 0%,
+      rgba(10, 8, 7, 0.82) 28%,
+      rgba(10, 8, 7, 0.28) 62%,
+      rgba(10, 8, 7, 0.1) 100%
+    ),
+    rgba(10, 8, 7, 0.18);
+}
+
+/* Speaker page dims and desaturates further — the tool must win. */
+.backdrop--muted .backdrop__video {
+  filter: saturate(0.7) brightness(0.55);
+  transform: scale(1.04);
+}
+
+.backdrop--muted .backdrop__scrim {
+  background: rgba(10, 8, 7, 0.74);
+}
+
+/* ---- Page shell ------------------------------------------ */
+
+.shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.4rem var(--shell-x);
+  border-bottom: var(--rule);
+}
+
+.wordmark {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--haze-50);
+}
+
+.topbar__meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--umber-500);
+}
+
+/* ============================================================
+   Landing
+   Hero sits LEFT and LOW. Asymmetry is the main anti-generated
+   signal — generated layouts centre everything.
+   ============================================================ */
+
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 6rem var(--shell-x) 3.5rem;
+  max-width: 1500px;
+  width: 100%;
+}
+
+/* The particle canvas. Height is fixed so the sampler has a stable
+   box to measure; width is capped so WHISPER never touches the edge. */
+.hero__title {
+  width: 100%;
+  max-width: 13em;
+  height: clamp(140px, 22vw, 280px);
+  min-height: 0; /* beat .particle-text's 240px floor on short viewports */
+  margin-left: -0.06em; /* optical: pull the W to the grid line */
+  cursor: crosshair;
+}
+
+.hero__lede {
+  margin-top: 1.6rem;
+  max-width: 56ch;
+  font-size: clamp(1.05rem, 1.6vw, 1.32rem);
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--haze-100);
+}
+
+.hero__lede em {
+  font-style: normal;
+  color: var(--gold-200);
+}
+
+.hero__actions {
+  margin-top: 2.4rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.6rem 2rem;
+}
+
+/* One CTA. Not a filled/ghost pair. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.95rem 1.7rem;
+  border: 1px solid var(--ember-300);
+  color: var(--gold-200);
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  transition: background 0.5s var(--ease), color 0.5s var(--ease),
+    border-color 0.5s var(--ease);
+}
+
+.cta__arrow {
+  transition: transform 0.5s var(--ease);
+}
+
+.cta:hover,
+.cta:focus-visible {
+  background: var(--ember-300);
+  border-color: var(--ember-300);
+  color: var(--ink-900);
+}
+
+.cta:hover .cta__arrow,
+.cta:focus-visible .cta__arrow {
+  transform: translateX(5px);
+}
+
+.hero__note {
+  font-size: 0.85rem;
+  color: var(--umber-500);
+  max-width: 30ch;
+  line-height: 1.5;
+}
+
+/* ---- The four-step strip --------------------------------- */
+/* Film credits, not a feature-card grid. Hairlines only. */
+
+.sequence {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: var(--rule);
+}
+
+.step {
+  padding: 1.9rem var(--shell-x) 2.2rem;
+  border-left: var(--rule);
+}
+
+.step:first-child {
+  border-left: none;
+}
+
+/* Steps inherit the shell gutter only on the outer edges. */
+.step:not(:first-child) {
+  padding-left: 1.6rem;
+}
+
+.step:not(:last-child) {
+  padding-right: 1.6rem;
+}
+
+.step__index {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--ember-400);
+}
+
+.step__name {
+  margin-top: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  color: var(--haze-50);
+}
+
+.step__body {
+  margin-top: 0.5rem;
   font-size: 0.9rem;
-  min-height: 1.2em;
+  line-height: 1.55;
+  color: rgba(246, 230, 205, 0.62);
 }
 
-.message.error {
-  color: #dc2626;
+.footline {
+  padding: 1.1rem var(--shell-x) 1.6rem;
+  border-top: var(--rule);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--umber-500);
 }
 
-.message.success {
-  color: #16a34a;
+/* ---- Landing responsive ---------------------------------- */
+
+@media (max-width: 760px) {
+  .sequence {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .step {
+    padding: 1.5rem var(--shell-x);
+    border-left: none;
+    border-top: var(--rule);
+  }
+
+  .step:nth-child(2n) {
+    border-left: var(--rule);
+  }
+
+  .step:nth-child(-n + 2) {
+    border-top: none;
+  }
+
+  .hero {
+    padding-top: 3rem;
+  }
+}
+
+/* ---- Reduced motion -------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

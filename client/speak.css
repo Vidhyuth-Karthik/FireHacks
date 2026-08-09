@@ -1,0 +1,466 @@
+/* ============================================================
+   Whisper — speaker page.
+   The ring mirrors the joystick's eight positions 1:1, so a slot's
+   place on screen never changes. See UI-SPEC.md §4.
+   ============================================================ */
+
+.speaker {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+/* ---- Header ---------------------------------------------- */
+
+.speaker__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1rem var(--shell-x);
+  border-bottom: var(--rule);
+}
+
+.speaker__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.85rem;
+}
+
+.speaker__back {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--umber-500);
+  transition: color 0.4s var(--ease);
+}
+
+.speaker__back:hover {
+  color: var(--gold-200);
+}
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  flex-wrap: wrap;
+}
+
+/* Colour is never the only signal — the dot changes shape/opacity too. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--umber-500);
+  background: none;
+  padding: 0;
+}
+
+.pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--umber-500);
+  transition: background 0.4s var(--ease), box-shadow 0.4s var(--ease);
+}
+
+.pill[data-state="live"] {
+  color: var(--haze-100);
+}
+
+.pill[data-state="live"] .pill__dot {
+  background: var(--signal);
+  box-shadow: 0 0 10px rgba(159, 196, 232, 0.75);
+}
+
+.pill[data-state="degraded"] {
+  color: var(--gold-200);
+}
+
+.pill[data-state="degraded"] .pill__dot {
+  background: var(--ember-300);
+  box-shadow: 0 0 8px rgba(224, 150, 74, 0.6);
+}
+
+.pill[data-actionable] {
+  cursor: pointer;
+}
+
+.voice-select {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--haze-100);
+  background: var(--ink-800);
+  border: var(--rule);
+  padding: 0.35rem 0.5rem;
+  max-width: 180px;
+}
+
+.badge-sim {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ember-300);
+  border: 1px solid var(--ember-400);
+  padding: 0.25rem 0.6rem;
+}
+
+.badge-sim[hidden] {
+  display: none;
+}
+
+/* ---- Body split: stage + brain rail ---------------------- */
+
+.speaker__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  min-height: 0;
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.5rem;
+  min-height: 0;
+}
+
+.stage__hint {
+  position: absolute;
+  top: 1.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--umber-500);
+}
+
+/* ---- The ring -------------------------------------------- */
+
+.ring {
+  --rx: 360px;
+  --ry: 235px;
+  position: relative;
+  width: calc(var(--rx) * 2 + 260px);
+  height: calc(var(--ry) * 2 + 150px);
+  max-width: 100%;
+}
+
+@media (max-width: 1400px) {
+  .ring {
+    --rx: 300px;
+    --ry: 205px;
+  }
+}
+
+@media (max-width: 1150px) {
+  .ring {
+    --rx: 250px;
+    --ry: 180px;
+  }
+}
+
+.slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* --x/--y are written by speak.js from the ellipse maths */
+  transform: translate(-50%, -50%) translate(var(--x, 0px), var(--y, 0px));
+  width: 210px;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: rgba(246, 230, 205, 0.55);
+  font-size: 1.05rem;
+  line-height: 1.35;
+  transition: color 0.45s var(--ease), border-color 0.45s var(--ease),
+    opacity 0.45s var(--ease), box-shadow 0.45s var(--ease);
+}
+
+.slot__key {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--umber-500);
+  margin-bottom: 0.4rem;
+}
+
+.slot[data-empty="true"] {
+  opacity: 0.2;
+}
+
+.slot[aria-selected="true"] {
+  color: var(--signal);
+  border-color: rgba(159, 196, 232, 0.55);
+  box-shadow: 0 0 34px rgba(159, 196, 232, 0.16);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.slot[aria-selected="true"] .slot__key {
+  color: var(--signal);
+}
+
+/* Opacity only — no scale. Scaling text hurts readability. */
+@keyframes breathe {
+  0%, 100% { opacity: 0.86; }
+  50% { opacity: 1; }
+}
+
+/* ---- Centre hub ------------------------------------------ */
+
+.hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 132px;
+  height: 132px;
+  border: 1px solid var(--umber-500);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  gap: 0.15rem;
+  text-align: center;
+  transition: border-color 0.4s var(--ease), box-shadow 0.4s var(--ease);
+}
+
+.hub__dir {
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--gold-200);
+}
+
+.hub__state {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--umber-500);
+}
+
+.hub[data-pulse="true"] {
+  border-color: var(--signal);
+  box-shadow: 0 0 40px rgba(159, 196, 232, 0.28);
+}
+
+.hub[data-thinking="true"] {
+  border-color: var(--ember-300);
+}
+
+.hub[data-thinking="true"] .hub__state {
+  color: var(--ember-300);
+}
+
+/* ---- Brain rail ------------------------------------------ */
+
+.rail {
+  border-left: var(--rule);
+  padding: 1.5rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+  min-height: 0;
+  background: rgba(10, 8, 7, 0.42);
+}
+
+.rail__block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 0;
+}
+
+.rail__block--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.context-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.86rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(47, 35, 26, 0.6);
+}
+
+.context-row__key {
+  color: var(--umber-500);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding-top: 0.2rem;
+}
+
+.context-row__val {
+  color: var(--haze-100);
+  text-align: right;
+}
+
+.trace {
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.75;
+  color: rgba(246, 230, 205, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--umber-500) transparent;
+}
+
+.trace__line time {
+  color: var(--umber-500);
+  margin-right: 0.6rem;
+}
+
+.trace__line[data-kind="reject"] {
+  color: var(--ember-300);
+}
+
+.trace__line[data-kind="speak"] {
+  color: var(--signal);
+}
+
+/* ---- Utterance bar --------------------------------------- */
+
+.utterance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
+  padding: 1.5rem var(--shell-x) 1.8rem;
+  border-top: var(--rule);
+  background: rgba(10, 8, 7, 0.55);
+}
+
+.utterance__text {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3.6vw, 2.9rem);
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: var(--haze-50);
+  flex: 1;
+  min-width: 260px;
+}
+
+.utterance__text[data-idle="true"] {
+  color: var(--umber-500);
+}
+
+.utterance__actions {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.ghost {
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--umber-500);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--haze-100);
+  transition: border-color 0.4s var(--ease), color 0.4s var(--ease);
+}
+
+.ghost:hover {
+  border-color: var(--gold-300);
+  color: var(--gold-200);
+}
+
+.ghost--warn:hover {
+  border-color: var(--ember-400);
+  color: var(--ember-300);
+}
+
+.keyhint {
+  padding: 0 var(--shell-x) 1rem;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--umber-500);
+}
+
+/* ---- Responsive ------------------------------------------ */
+
+@media (max-width: 1100px) {
+  .speaker__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    border-left: none;
+    border-top: var(--rule);
+    max-height: 260px;
+  }
+}
+
+/* Under 900px the ellipse can't hold eight boxes — fall back to a
+   list in the same compass order so index positions stay stable. */
+@media (max-width: 900px) {
+  .ring {
+    width: 100%;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .slot {
+    position: static;
+    transform: none;
+    width: 100%;
+    text-align: left;
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+  }
+
+  .slot__key {
+    margin-bottom: 0;
+  }
+
+  .hub {
+    position: static;
+    transform: none;
+    width: 100%;
+    height: auto;
+    border-radius: 0;
+    border: none;
+    border-bottom: var(--rule);
+    padding-bottom: 0.8rem;
+    margin-bottom: 0.6rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .stage__hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot[aria-selected="true"] {
+    animation: none;
+    opacity: 1;
+  }
+}

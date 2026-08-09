@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speaker — Whisper</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0807'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%239fc4e8'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=IBM+Plex+Mono:wght@400&family=Public+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="speak.css">
+</head>
+<body>
+
+  <!-- Same still, dimmed hard. The tool has to win the contrast fight. -->
+  <div class="backdrop backdrop--muted">
+    <video
+      class="backdrop__video"
+      autoplay muted loop playsinline
+      preload="auto"
+      aria-hidden="true"
+      data-bg-video>
+      <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_171521_25968ba2-b594-4b32-aab7-f6b69398a6fa.mp4" type="video/mp4">
+    </video>
+    <div class="backdrop__scrim"></div>
+  </div>
+
+  <div class="speaker">
+
+    <header class="speaker__bar">
+      <div class="speaker__brand">
+        <span class="wordmark">Whisper</span>
+        <a class="speaker__back" href="index.html">&#8592; Back</a>
+        <span class="badge-sim" data-sim-badge hidden>Simulated</span>
+      </div>
+
+      <div class="statusbar">
+        <span class="pill" data-pill="device"><span class="pill__dot"></span>Device</span>
+        <span class="pill" data-pill="server"><span class="pill__dot"></span>Server</span>
+        <button class="pill" data-pill="voice" data-actionable type="button" data-voice-enable>
+          <span class="pill__dot"></span><span data-voice-label>Voice</span>
+        </button>
+        <select class="voice-select" data-voice-select aria-label="Speech voice"></select>
+      </div>
+    </header>
+
+    <div class="speaker__body">
+
+      <section class="stage">
+        <p class="label stage__hint">Nudge to choose &middot; press to speak</p>
+
+        <!-- Eight fixed compass slots. Positions are written by speak.js. -->
+        <div
+          class="ring"
+          data-ring
+          role="listbox"
+          aria-label="Predicted things to say"
+          tabindex="0">
+
+          <div class="hub" data-hub>
+            <span class="hub__dir" data-hub-dir aria-hidden="true">&middot;</span>
+            <span class="hub__state" data-hub-state>Idle</span>
+          </div>
+          <!-- .slot elements injected here -->
+        </div>
+      </section>
+
+      <!-- Makes the agent visible instead of a black box. -->
+      <aside class="rail" aria-label="Agent state">
+        <div class="rail__block">
+          <p class="label">Context</p>
+          <div data-context></div>
+        </div>
+
+        <div class="rail__block rail__block--grow">
+          <p class="label">Trace</p>
+          <div class="trace" data-trace></div>
+        </div>
+      </aside>
+
+    </div>
+
+    <footer>
+      <div class="utterance">
+        <p class="utterance__text" data-utterance data-idle="true" aria-live="polite">
+          Waiting for a nudge.
+        </p>
+        <div class="utterance__actions">
+          <button class="ghost" type="button" data-speak-again>Speak again</button>
+          <button class="ghost ghost--warn" type="button" data-regenerate>Not what I meant</button>
+        </div>
+      </div>
+      <p class="keyhint">
+        Arrows move &middot; Enter speaks &middot; R regenerates &middot; 1&ndash;8 jump to a slot
+      </p>
+    </footer>
+
+  </div>
+
+  <script type="module" src="speak.js"></script>
+</body>
+</html>
