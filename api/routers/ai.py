@@ -9,13 +9,16 @@
 # call with a different base URL. Configure with FEATHERLESS_API_KEY and
 # FEATHERLESS_MODEL - see .env.example.
 #
-# IMPORTANT - reasoning models are slow.
-# The configured default is a DeepSeek-R1 distill, which "thinks out loud"
-# before answering: measured ~19s for a prediction. That is fine for
-# predictions (the frontend prefetches them while the user is still
-# choosing) but it would be unusable on the press-to-speak path, so
-# /expand defaults to a template and only calls the model when asked.
-# Set FEATHERLESS_MODEL to a non-reasoning model for a faster demo.
+# IMPORTANT - reasoning models are slow, and this runs as a Vercel
+# serverless function with (by default) a 10s execution limit.
+# The default model is a plain instruct model (~2-4s/prediction) for
+# that reason. Reasoning models - DeepSeek-R1 distills, QwQ, etc. -
+# "think out loud" before answering: the R1-14B distill measured ~19-34s,
+# QwQ-32B ~40s. Both will time out as a Vercel function unless you migrate
+# vercel.json off the legacy builds/routes format to set a longer
+# maxDuration. /expand defaults to a template regardless, since it sits
+# on the press-to-speak path where even a fast model's latency is too
+# slow - pass use_model=true there only if you've solved the timeout.
 
 import json
 import os
@@ -35,9 +38,7 @@ FEATHERLESS_BASE_URL = os.environ.get(
     "FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1"
 ).rstrip("/")
 FEATHERLESS_API_KEY = os.environ.get("FEATHERLESS_API_KEY", "")
-FEATHERLESS_MODEL = os.environ.get(
-    "FEATHERLESS_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
-)
+FEATHERLESS_MODEL = os.environ.get("FEATHERLESS_MODEL", "Qwen/Qwen2.5-14B-Instruct")
 FEATHERLESS_TIMEOUT = float(os.environ.get("FEATHERLESS_TIMEOUT", "90"))
 
 OPTION_COUNT = 8
