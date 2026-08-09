@@ -15,7 +15,7 @@
 </head>
 <body>
 
-  <!-- Fixed behind everything. Degrades to warm black if the CDN is unreachable. -->
+  <!-- Untinted. Only a soft top vignette so the floating nav reads. -->
   <div class="backdrop">
     <video
       class="backdrop__video"
@@ -30,37 +30,39 @@
 
   <div class="shell">
 
-    <header class="topbar">
+    <header class="topbar glass">
       <span class="wordmark">Whisper</span>
       <span class="topbar__meta">FireHacks 2026 — ESP32 / FastAPI / Turso / Featherless</span>
     </header>
 
     <main class="hero">
-      <!-- ParticleText mounts here. Hover scatters and re-gathers the word. -->
+      <!-- ParticleText mounts here and replaces the fallback. Hovering
+           scatters the glyphs and re-gathers them. -->
       <h1 class="hero__title" data-particle-title>
-        <span class="sr-only">Whisper</span>
+        <span class="hero__fallback">WHISPER</span>
       </h1>
 
-      <p class="hero__lede">
-        A joystick, four directions, and a press. Whisper reads the smallest
-        movement a person can still make and turns it into a full sentence,
-        spoken out loud — <em>and it gets better every time it guesses wrong.</em>
-      </p>
-
-      <div class="hero__actions">
-        <a class="cta" href="speak.html">
-          Open the speaker
-          <span class="cta__arrow" aria-hidden="true">&#8594;</span>
-        </a>
-        <p class="hero__note">
-          Runs with no hardware attached — arrow keys drive the same loop.
+      <div class="hero__panel glass">
+        <p class="hero__lede">
+          A joystick, four directions, and a press. Whisper reads the smallest
+          movement a person can still make and turns it into a full sentence,
+          spoken out loud — <em>and it gets better every time it guesses wrong.</em>
         </p>
+
+        <div class="hero__actions">
+          <a class="cta cursor-target" href="speak.html">
+            Open the speaker
+            <span class="cta__arrow" aria-hidden="true">&#8594;</span>
+          </a>
+          <p class="hero__note">
+            Runs with no hardware attached — arrow keys drive the same loop.
+          </p>
+        </div>
       </div>
     </main>
 
-    <!-- Film credits, not a feature grid. Hairlines, no cards, no icons. -->
     <section class="sequence" aria-label="How it works">
-      <article class="step">
+      <article class="step glass cursor-target">
         <p class="step__index">01</p>
         <h2 class="step__name">Nudge</h2>
         <p class="step__body">
@@ -69,7 +71,7 @@
         </p>
       </article>
 
-      <article class="step">
+      <article class="step glass cursor-target">
         <p class="step__index">02</p>
         <h2 class="step__name">Predict</h2>
         <p class="step__body">
@@ -78,7 +80,7 @@
         </p>
       </article>
 
-      <article class="step">
+      <article class="step glass cursor-target">
         <p class="step__index">03</p>
         <h2 class="step__name">Speak</h2>
         <p class="step__body">
@@ -87,7 +89,7 @@
         </p>
       </article>
 
-      <article class="step">
+      <article class="step glass cursor-target">
         <p class="step__index">04</p>
         <h2 class="step__name">Learn</h2>
         <p class="step__body">
@@ -105,34 +107,45 @@
 
   <script type="module">
     import { mountParticleText } from './particle-text.js';
+    import { mountTargetCursor } from './target-cursor.js';
 
     const title = document.querySelector('[data-particle-title]');
     if (title) {
-      title.innerHTML = '';
+      title.innerHTML = ''; // drop the no-JS fallback word
       mountParticleText(title, {
         text: 'WHISPER',
-        trigger: 'hover',        // pointer entry blows it apart and re-forms
-        color: '#fbf3e6',        // --haze-50
+        trigger: 'hover',          // pointer entry blows it apart and re-forms
+        color: '#fbf3e6',          // --haze-50
         highlightColor: '#edb46a', // --gold-300, never the component's violet
-        particleSize: 2,
-        density: 3,
-        scatter: 220,
-        gatherDuration: 1700,
-        stagger: 520,
-        pointerRepel: 46,
-        repelRadius: 140,
-        idleDrift: 0.55,
-        fontSize: 'clamp(3.4rem, 13vw, 9rem)',
+        particleSize: 2.1,
+        density: 2,                // denser sampling — reads as a solid word
+        scatter: 260,
+        gatherDuration: 1500,
+        stagger: 480,
+        pointerRepel: 55,
+        repelRadius: 165,
+        idleDrift: 0.6,
+        fontSize: 'clamp(3.4rem, 15vw, 11rem)',
         fontWeight: 300,
         fontFamily: '"Cormorant Garamond", Georgia, serif',
         glow: true,
       });
     }
 
-    // Honour reduced motion for the background video too.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      document.querySelectorAll('[data-bg-video]').forEach((v) => v.pause());
-    }
+    mountTargetCursor({
+      spinDuration: 2,
+      hoverDuration: 0.2,
+      parallaxOn: true,
+      cursorColor: '#fbf3e6',
+      cursorColorOnTarget: '#edb46a',
+    });
+
+    // Some browsers still refuse the autoplay attribute; ask explicitly.
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.querySelectorAll('[data-bg-video]').forEach((v) => {
+      if (reduced) v.pause();
+      else v.play().catch(() => {});
+    });
   </script>
 
 </body>

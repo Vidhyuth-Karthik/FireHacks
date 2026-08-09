@@ -9,22 +9,27 @@
      {"state":"options","items":[...],"highlight":0}
      {"state":"speak","text":"..."}
      {"state":"expanding"} | {"state":"confirm","text":...} | {"state":"idle"}
+
+   `items` may be plain strings or {short, full} pairs. The ring shows
+   the short label; the voice says the full sentence. That split IS the
+   product: minimal input, complete speech.
    ============================================================ */
 
 import { WS_URL, API_BASE_URL, FORCE_MOCK } from './config.js';
+import { mountTargetCursor } from './target-cursor.js';
 
 /* ---- Geometry -------------------------------------------- */
-/* Clockwise from top. A slot's position NEVER changes: positional
-   memory is the accessibility win, so short lists leave gaps. */
+/* Clockwise from top. A slot's position NEVER changes; each also owns
+   a fixed semantic role so a user learns "up is always the urgent one". */
 const SLOTS = [
-  { dir: 'up', angle: -90, glyph: '↑' },
-  { dir: 'up_right', angle: -45, glyph: '↗' },
-  { dir: 'right', angle: 0, glyph: '→' },
-  { dir: 'down_right', angle: 45, glyph: '↘' },
-  { dir: 'down', angle: 90, glyph: '↓' },
-  { dir: 'down_left', angle: 135, glyph: '↙' },
-  { dir: 'left', angle: 180, glyph: '←' },
-  { dir: 'up_left', angle: -135, glyph: '↖' },
+  { dir: 'up', angle: -90, glyph: '↑', role: 'need' },
+  { dir: 'up_right', angle: -45, glyph: '↗', role: 'food' },
+  { dir: 'right', angle: 0, glyph: '→', role: 'comfort' },
+  { dir: 'down_right', angle: 45, glyph: '↘', role: 'position' },
+  { dir: 'down', angle: 90, glyph: '↓', role: 'pain' },
+  { dir: 'down_left', angle: 135, glyph: '↙', role: 'people' },
+  { dir: 'left', angle: 180, glyph: '←', role: 'environment' },
+  { dir: 'up_left', angle: -135, glyph: '↖', role: 'closing' },
 ];
 
 const DIR_INDEX = new Map(SLOTS.map((s, i) => [s.dir, i]));
@@ -32,6 +37,7 @@ const DIR_INDEX = new Map(SLOTS.map((s, i) => [s.dir, i]));
 /* ---- Elements -------------------------------------------- */
 const els = {
   ring: document.querySelector('[data-ring]'),
+  lens: document.querySelector('[data-lens]'),
   hub: document.querySelector('[data-hub]'),
   hubDir: document.querySelector('[data-hub-dir]'),
   hubState: document.querySelector('[data-hub-state]'),
@@ -48,7 +54,7 @@ const els = {
 
 /* ---- State ----------------------------------------------- */
 const state = {
-  items: [],
+  items: [], // normalised {short, full}
   highlight: 0,
   lastSpoken: '',
   mock: FORCE_MOCK,
@@ -62,6 +68,13 @@ function partOfDay(d = new Date()) {
   if (h < 17) return 'afternoon';
   if (h < 21) return 'evening';
   return 'night';
+}
+
+/* Backend may send strings; normalise everything to {short, full}. */
+function normaliseItem(item) {
+  if (!item) return null;
+  if (typeof item === 'string') return { short: item, full: item };
+  return { short: item.short ?? item.text ?? '', full: item.full ?? item.text ?? item.short ?? '' };
 }
 
 /* ---- Status pills ---------------------------------------- */
@@ -87,7 +100,6 @@ function trace(message, kind = 'info') {
   line.append(stamp, document.createTextNode(message));
   els.trace.append(line);
 
-  // Keep the log bounded during a long demo.
   while (els.trace.childElementCount > 120) els.trace.firstElementChild.remove();
   els.trace.scrollTop = els.trace.scrollHeight;
 }
@@ -99,15 +111,14 @@ function renderContext() {
     ['Speaking as', state.context.name],
     ['Time', state.context.partOfDay],
     ['Source', state.mock ? 'local agent' : 'backend'],
-    ['Recent', state.context.recent.slice(-3).join(' · ') || '—'],
+    ['Recent', state.context.recent.slice(-2).join(' · ') || '—'],
   ];
 
   els.context.innerHTML = '';
   for (const [key, val] of rows) {
     const row = document.createElement('div');
     row.className = 'context-row';
-    row.innerHTML =
-      `<span class="context-row__key"></span><span class="context-row__val"></span>`;
+    row.innerHTML = `<span class="context-row__key"></span><span class="context-row__val"></span>`;
     row.children[0].textContent = key;
     row.children[1].textContent = val;
     els.context.append(row);
@@ -119,12 +130,13 @@ function buildRing() {
   if (!els.ring) return;
   SLOTS.forEach((slot, index) => {
     const el = document.createElement('div');
-    el.className = 'slot';
+    el.className = 'slot cursor-target';
     el.id = `slot-${index}`;
     el.setAttribute('role', 'option');
     el.setAttribute('aria-selected', 'false');
     el.dataset.index = String(index);
     el.dataset.empty = 'true';
+    el.style.setProperty('--i', String(index));
     el.innerHTML = `<span class="slot__key"></span><span data-text></span>`;
     el.querySelector('.slot__key').textContent = `${index + 1} ${slot.glyph}`;
     el.addEventListener('click', () => {
@@ -136,34 +148,85 @@ function buildRing() {
   positionSlots();
 }
 
-/* Ellipse maths. Radii come from CSS so the ring can shrink without JS. */
-function positionSlots() {
-  if (!els.ring) return;
+/* Ellipse maths. Radii come from CSS so the ring shrinks without JS. */
+function ringRadii() {
   const styles = getComputedStyle(els.ring);
-  const rx = parseFloat(styles.getPropertyValue('--rx')) || 360;
-  const ry = parseFloat(styles.getPropertyValue('--ry')) || 235;
-
-  els.ring.querySelectorAll('.slot').forEach((el) => {
-    const { angle } = SLOTS[Number(el.dataset.index)];
-    const rad = (angle * Math.PI) / 180;
-    el.style.setProperty('--x', `${Math.cos(rad) * rx}px`);
-    el.style.setProperty('--y', `${Math.sin(rad) * ry}px`);
-  });
+  return {
+    rx: parseFloat(styles.getPropertyValue('--rx')) || 340,
+    ry: parseFloat(styles.getPropertyValue('--ry')) || 215,
+  };
 }
 
-function renderOptions() {
+function slotOffset(index) {
+  const { rx, ry } = ringRadii();
+  const rad = (SLOTS[index].angle * Math.PI) / 180;
+  return { x: Math.cos(rad) * rx, y: Math.sin(rad) * ry };
+}
+
+function positionSlots() {
+  if (!els.ring) return;
+  els.ring.querySelectorAll('.slot').forEach((el) => {
+    const { x, y } = slotOffset(Number(el.dataset.index));
+    el.style.setProperty('--x', `${x}px`);
+    el.style.setProperty('--y', `${y}px`);
+  });
+  moveLens({ animate: false });
+}
+
+/* The lens flows to the active slot. Uniform slot size means this is a
+   pure translate — no reflow, so it stays smooth under any load. */
+let lensTimer = null;
+function moveLens({ animate = true } = {}) {
+  if (!els.lens) return;
+
+  const active = state.items[state.highlight];
+  if (!active) {
+    els.lens.dataset.visible = 'false';
+    return;
+  }
+
+  const { x, y } = slotOffset(state.highlight);
+  const wasHidden = els.lens.dataset.visible !== 'true';
+
+  if (!animate || wasHidden) {
+    // Jump without a tween when appearing or on resize.
+    els.lens.style.transition = 'none';
+    els.lens.style.setProperty('--lx', `${x}px`);
+    els.lens.style.setProperty('--ly', `${y}px`);
+    els.lens.offsetHeight; // flush
+    els.lens.style.transition = '';
+    els.lens.dataset.visible = 'true';
+    return;
+  }
+
+  els.lens.style.setProperty('--lx', `${x}px`);
+  els.lens.style.setProperty('--ly', `${y}px`);
+  els.lens.dataset.moving = 'true';
+  clearTimeout(lensTimer);
+  lensTimer = setTimeout(() => {
+    els.lens.dataset.moving = 'false';
+  }, 260);
+}
+
+function renderOptions({ entering = false } = {}) {
   if (!els.ring) return;
   els.ring.querySelectorAll('.slot').forEach((el) => {
     const index = Number(el.dataset.index);
-    const text = state.items[index] ?? '';
-    el.querySelector('[data-text]').textContent = text;
-    el.dataset.empty = text ? 'false' : 'true';
-    const selected = text && index === state.highlight;
-    el.setAttribute('aria-selected', selected ? 'true' : 'false');
+    const item = state.items[index];
+    el.querySelector('[data-text]').textContent = item ? item.short : '';
+    el.dataset.empty = item ? 'false' : 'true';
+    el.setAttribute('aria-selected', item && index === state.highlight ? 'true' : 'false');
+
+    if (entering && item) {
+      el.dataset.enter = 'false';
+      el.offsetHeight; // restart the animation
+      el.dataset.enter = 'true';
+    }
   });
 
   const active = els.ring.querySelector('[aria-selected="true"]');
   els.ring.setAttribute('aria-activedescendant', active ? active.id : '');
+  moveLens({ animate: !entering });
 }
 
 function setHighlight(index) {
@@ -171,7 +234,6 @@ function setHighlight(index) {
   const count = SLOTS.length;
   let next = ((index % count) + count) % count;
 
-  // Skip empty slots so navigation never lands on a gap.
   let guard = 0;
   while (!state.items[next] && guard++ < count) next = (next + 1) % count;
 
@@ -205,18 +267,27 @@ function setHub(glyph, label, { pulse = false, thinking = false } = {}) {
     clearTimeout(pulseTimer);
     pulseTimer = setTimeout(() => {
       els.hub.dataset.pulse = 'false';
-    }, 420);
+    }, 460);
   }
 }
 
 /* ---- Speech ---------------------------------------------- */
-const speech = {
-  ready: false,
-  voices: [],
-  voiceURI: null,
-};
-
+const speech = { ready: false, voices: [], voiceURI: null };
 const VOICE_KEY = 'whisper.voice';
+
+/* Pick something that sounds like a person, not a 2005 screen reader.
+   Higher score wins when nothing is stored. */
+function scoreVoice(v) {
+  const n = v.name.toLowerCase();
+  let s = 0;
+  if (n.includes('natural')) s += 60;        // Microsoft *Natural
+  if (n.includes('google')) s += 45;
+  if (/samantha|ava|serena|allison|karen|moira|daniel|siri/.test(n)) s += 40;
+  if (v.localService === false) s += 12;     // cloud voices are usually better
+  if (/desktop|espeak|compact/.test(n)) s -= 40;
+  if (v.lang === 'en-GB' || v.lang === 'en-US') s += 8;
+  return s;
+}
 
 function loadVoices() {
   if (!('speechSynthesis' in window)) {
@@ -225,12 +296,22 @@ function loadVoices() {
     return;
   }
 
-  speech.voices = speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'));
+  speech.voices = speechSynthesis
+    .getVoices()
+    .filter((v) => v.lang.startsWith('en'))
+    .sort((a, b) => scoreVoice(b) - scoreVoice(a));
+
   if (!speech.voices.length) return;
 
-  try {
-    speech.voiceURI = speech.voiceURI || localStorage.getItem(VOICE_KEY);
-  } catch {}
+  if (!speech.voiceURI) {
+    try {
+      speech.voiceURI = localStorage.getItem(VOICE_KEY);
+    } catch {}
+  }
+  // Nothing stored, or the stored voice is gone: take the best available.
+  if (!speech.voiceURI || !speech.voices.some((v) => v.voiceURI === speech.voiceURI)) {
+    speech.voiceURI = speech.voices[0].voiceURI;
+  }
 
   if (els.voiceSelect) {
     els.voiceSelect.innerHTML = '';
@@ -240,15 +321,14 @@ function loadVoices() {
       opt.textContent = v.name;
       els.voiceSelect.append(opt);
     });
-    if (speech.voiceURI) els.voiceSelect.value = speech.voiceURI;
-    else speech.voiceURI = els.voiceSelect.value;
+    els.voiceSelect.value = speech.voiceURI;
   }
 }
 
 /* Browsers refuse speechSynthesis before a user gesture — prime it once. */
 function unlockVoice() {
   if (speech.ready || !('speechSynthesis' in window)) return;
-  const warmup = new SpeechSynthesisUtterance('');
+  const warmup = new SpeechSynthesisUtterance(' ');
   warmup.volume = 0;
   speechSynthesis.speak(warmup);
   speech.ready = true;
@@ -274,9 +354,12 @@ function speak(text) {
   speechSynthesis.cancel(); // never stack utterances
   const utter = new SpeechSynthesisUtterance(text);
   const voice = speech.voices.find((v) => v.voiceURI === speech.voiceURI);
-  if (voice) utter.voice = voice;
-  utter.rate = 0.96;
-  utter.pitch = 1;
+  if (voice) {
+    utter.voice = voice;
+    utter.lang = voice.lang;
+  }
+  utter.rate = 0.94; // unhurried — this is somebody speaking, not an alert
+  utter.pitch = 1.02;
   speechSynthesis.speak(utter);
 }
 
@@ -284,18 +367,22 @@ function showUtterance(text) {
   if (!els.utterance) return;
   els.utterance.textContent = text;
   els.utterance.dataset.idle = 'false';
+  els.utterance.dataset.fresh = 'false';
+  els.utterance.offsetHeight; // restart the entrance
+  els.utterance.dataset.fresh = 'true';
 }
 
 /* ---- Backend messages ------------------------------------ */
 function applyMessage(msg) {
   switch (msg.state) {
-    case 'options':
-      state.items = (msg.items || []).slice(0, SLOTS.length);
+    case 'options': {
+      state.items = (msg.items || []).slice(0, SLOTS.length).map(normaliseItem);
       state.highlight = Number.isInteger(msg.highlight) ? msg.highlight : 0;
-      renderOptions();
+      renderOptions({ entering: true });
       setHub(null, 'Choosing');
-      trace(`predicted ${state.items.length} options`);
+      trace(`predicted ${state.items.filter(Boolean).length} options`);
       break;
+    }
 
     case 'expanding':
       setHub(null, 'Thinking', { thinking: true });
@@ -312,7 +399,7 @@ function applyMessage(msg) {
       speak(msg.text);
       setHub(null, 'Speaking');
       trace(`spoke "${msg.text}"`, 'speak');
-      state.context.recent.push(msg.text);
+      state.context.recent.push(msg.short || msg.text);
       renderContext();
       break;
 
@@ -330,7 +417,6 @@ function applyMessage(msg) {
       trace(`unhandled state: ${msg.state}`);
   }
 
-  // Optional: backend may echo the raw direction so the hub can animate.
   if (msg.dir) {
     const slot = SLOTS[DIR_INDEX.get(msg.dir) ?? -1];
     setHub(slot ? slot.glyph : '·', null, { pulse: msg.dir === 'press' });
@@ -361,7 +447,7 @@ function connect() {
     clearTimeout(failTimer);
     reconnectAttempts = 0;
     setPill('server', 'live');
-    setPill('device', 'live'); // backend is the device's only route in
+    setPill('device', 'live'); // the backend is the device's only route in
     trace(`connected to ${WS_URL}`);
   });
 
@@ -378,11 +464,8 @@ function connect() {
     setPill('server', 'down');
     setPill('device', 'down');
     reconnectAttempts += 1;
-    if (reconnectAttempts >= 2) {
-      enterMock('backend unreachable');
-    } else {
-      setTimeout(connect, 1200);
-    }
+    if (reconnectAttempts >= 2) enterMock('backend unreachable');
+    else setTimeout(connect, 1200);
   });
 
   socket.addEventListener('error', () => socket.close());
@@ -402,64 +485,115 @@ function enterMock(reason) {
 
 /* ---- Local scripted agent -------------------------------- */
 /* Stands in for predict_options()/expand() so the frontend is never
-   blocked on the AI or backend tracks. Phrases mirror the synthetic
-   AAC set: needs, feelings, people, actions. */
+   blocked on the AI or backend tracks.
+
+   Each set is eight intents in fixed compass order, one per slot role:
+   need / food / comfort / position / pain / people / environment / closing.
+   `short` is what the ring shows; `full` is what the voice says. */
+
+const s = (short, full) => ({ short, full });
+
 const MOCK_SETS = {
   morning: [
-    ['I need the bathroom', 'I\'d like breakfast', 'I\'m too cold', 'Can you sit me up',
-     'I want to see someone', 'My mouth is dry', 'Open the curtains', 'I\'m alright'],
-    ['I want to get dressed', 'Turn the radio on', 'My back hurts', 'I\'d like a drink',
-     'Call my daughter', 'I\'m tired still', 'Too bright in here', 'Nothing right now'],
+    [
+      s('Bathroom', 'I need to use the bathroom — could you help me there?'),
+      s('Breakfast', "I'd like some breakfast when there's a moment."),
+      s('Too cold', "I'm cold. Could I have another blanket, please?"),
+      s('Sit me up', 'Could you help me sit up a little higher?'),
+      s('My back hurts', 'My back is hurting this morning — more than usual.'),
+      s('Call my daughter', "I'd like to speak to my daughter today, if she's free."),
+      s('Open the curtains', 'Could you open the curtains? I want to see outside.'),
+      s("I'm alright", "I'm alright for now, thank you."),
+    ],
+    [
+      s('Something to drink', "I'm thirsty — could I have some water?"),
+      s('Not hungry yet', "I don't want anything to eat just yet, thank you."),
+      s('Too warm', "I'm too warm. Could you take one of these off?"),
+      s('Get dressed', "I'd like to get dressed now, please."),
+      s('Still tired', "I didn't sleep well and I'm still very tired."),
+      s('Who is here?', "Could you tell me who's here this morning?"),
+      s('Too bright', "It's too bright in here — could you dim the light?"),
+      s('Nothing right now', 'Nothing right now, thank you.'),
+    ],
   ],
   afternoon: [
-    ['I\'d like a drink', 'I need to move', 'I\'m in pain', 'Put the TV on',
-     'I want company', 'Take me outside', 'I\'m hungry', 'I\'m fine thanks'],
-    ['Can you help me up', 'It\'s too loud', 'I want to rest', 'Call the nurse',
-     'I\'d like the window open', 'Where is everyone', 'My hand is stuck', 'Nothing right now'],
+    [
+      s('Bathroom', 'I need to use the bathroom — could you help me there?'),
+      s('Something to drink', "I'm thirsty — could I have something to drink?"),
+      s('Too cold', "I'm getting cold. Could I have a blanket?"),
+      s('Help me move', "I've been in this position too long. Could you help me move?"),
+      s("I'm in pain", "I'm in a lot of pain and I'd like someone to know."),
+      s('I want company', "I'd like some company for a while, if you can stay."),
+      s('Put the TV on', 'Could you put the television on for me?'),
+      s("I'm alright", "I'm alright, thank you for asking."),
+    ],
+    [
+      s('Something to eat', "I'm hungry — could I have something to eat?"),
+      s('Not thirsty', "No, I don't want anything to drink, thank you."),
+      s('Take me outside', "I'd love to go outside for a bit if the weather's good."),
+      s('Help me up', 'Could you help me sit up, please?'),
+      s('My hand is stuck', 'My hand is caught — could you move it for me?'),
+      s('Call the nurse', 'Could you call the nurse? I need some help.'),
+      s('Too loud', "It's too loud in here. Could you turn that down?"),
+      s('Nothing right now', 'Nothing right now, thank you.'),
+    ],
   ],
   evening: [
-    ['I\'m ready for bed', 'I\'d like dinner', 'I\'m cold', 'Can someone stay',
-     'Turn the light down', 'I\'m in pain', 'Call my son', 'I\'m alright'],
-    ['I want to sit up', 'Put music on', 'I need the bathroom', 'I\'m thirsty',
-     'Too quiet in here', 'I want to talk', 'My legs ache', 'Nothing right now'],
+    [
+      s('Bathroom', 'I need the bathroom before I settle down.'),
+      s('Dinner', "I'd like my dinner now, please."),
+      s("I'm cold", "I'm cold — could I have another blanket?"),
+      s('Ready for bed', "I'm ready to go to bed now."),
+      s("I'm in pain", "I'm in pain and I'd like something for it."),
+      s('Call my son', "I'd like to ring my son before it gets late."),
+      s('Dim the light', 'Could you turn the light down a little?'),
+      s("I'm alright", "I'm alright, thank you."),
+    ],
+    [
+      s('Something to drink', 'Could I have a drink before bed?'),
+      s('Not hungry', "I don't want anything to eat tonight, thank you."),
+      s('Sit up a bit', "Could you sit me up a bit? I'm not comfortable."),
+      s('Stay a while', 'Would you stay with me a while? I like the company.'),
+      s('My legs ache', 'My legs are aching badly this evening.'),
+      s('I want to talk', "I'd like to talk to someone for a bit."),
+      s('Put music on', 'Could you put some music on, quietly?'),
+      s('Nothing right now', 'Nothing right now, thank you.'),
+    ],
   ],
   night: [
-    ['I can\'t sleep', 'I need the bathroom', 'I\'m cold', 'Please stay a minute',
-     'I\'m in pain', 'Turn the light off', 'I\'m thirsty', 'I\'m alright'],
-    ['Something\'s wrong', 'Call someone', 'Fix my pillow', 'I\'m too warm',
-     'I want quiet', 'I\'m frightened', 'I need to move', 'Nothing right now'],
+    [
+      s('Bathroom', 'I need the bathroom — I know it’s late, I’m sorry.'),
+      s("I'm thirsty", 'Could I have a sip of water?'),
+      s("I'm cold", "I'm cold. Could you put another blanket over me?"),
+      s("Can't sleep", "I can't get to sleep. I've been lying here a long time."),
+      s("I'm in pain", "I'm in pain and I can't settle because of it."),
+      s('Please stay', 'Would you stay with me a few minutes? I don’t want to be alone.'),
+      s('Turn the light off', 'Could you turn the light off, please?'),
+      s("I'm alright", "I'm alright — go back to sleep."),
+    ],
+    [
+      s('Something is wrong', "Something isn't right. I think you should check on me."),
+      s('Too warm', "I'm too warm — could you take a blanket off?"),
+      s('Fix my pillow', 'My pillow has slipped. Could you fix it for me?'),
+      s('I need to move', "I need to be moved — I've been on this side too long."),
+      s("I'm frightened", "I'm frightened and I'd rather not be on my own."),
+      s('Call someone', 'Please call someone for me.'),
+      s('Too noisy', "There's a noise keeping me awake."),
+      s('Nothing right now', 'Nothing right now — thank you.'),
+    ],
   ],
-};
-
-const MOCK_EXPANSIONS = {
-  'I need the bathroom': 'I need to use the bathroom, could you help me?',
-  'I\'d like breakfast': 'I think I\'d like some breakfast now, please.',
-  'I\'m too cold': 'I\'m getting cold — could I have another blanket?',
-  'I\'m cold': 'I\'m getting cold — could I have another blanket?',
-  'Can you sit me up': 'Could you help me sit up a little, please?',
-  'I want to see someone': 'I\'d really like to see someone today.',
-  'I\'m in pain': 'I\'m in quite a lot of pain and I\'d like someone to know.',
-  'I can\'t sleep': 'I can\'t get to sleep — would you sit with me a while?',
-  'Please stay a minute': 'Would you stay with me for a minute? I\'d like the company.',
-  'I\'m thirsty': 'I\'m thirsty — could I have something to drink?',
-  'I\'m alright': 'I\'m alright, thank you for asking.',
-  'Nothing right now': 'Nothing right now, thank you.',
 };
 
 let mockVariant = 0;
 
 function mockPredict() {
   const sets = MOCK_SETS[state.context.partOfDay] || MOCK_SETS.afternoon;
-  const items = sets[mockVariant % sets.length];
-  applyMessage({ state: 'options', items, highlight: 0 });
+  applyMessage({ state: 'options', items: sets[mockVariant % sets.length], highlight: 0 });
 }
 
-function mockExpand(choice) {
+function mockExpand(item) {
   applyMessage({ state: 'expanding' });
-  const text =
-    MOCK_EXPANSIONS[choice] ||
-    `${choice.charAt(0).toUpperCase()}${choice.slice(1)}, please.`;
-  setTimeout(() => applyMessage({ state: 'speak', text }), 460);
+  setTimeout(() => applyMessage({ state: 'speak', text: item.full, short: item.short }), 480);
 }
 
 /* ---- Input ----------------------------------------------- */
@@ -467,25 +601,25 @@ function select() {
   const choice = state.items[state.highlight];
   if (!choice) return;
   setHub(null, 'Selected', { pulse: true });
-  trace(`selected "${choice}"`);
+  trace(`selected "${choice.short}"`);
   if (state.mock) mockExpand(choice);
-  // Live mode: the backend owns the transition; the ESP32 press already told it.
+  // Live mode: the backend owns the transition; the ESP32 press told it already.
 }
 
 function regenerate() {
   const rejected = state.items[state.highlight];
-  trace(`rejected "${rejected ?? 'set'}" — re-predicting`, 'reject');
+  trace(`rejected "${rejected?.short ?? 'set'}" — re-predicting`, 'reject');
   if (state.mock) {
     mockVariant += 1;
     setHub(null, 'Thinking', { thinking: true });
-    setTimeout(mockPredict, 420);
+    setTimeout(mockPredict, 460);
   } else {
     postInput('left');
   }
 }
 
-/* Only used when a backend is live and we want to drive it from the
-   browser — the ESP32 posts to the same endpoint. Best-effort. */
+/* Only used when a backend is live and we drive it from the browser —
+   the ESP32 posts to this same endpoint. Best-effort. */
 function postInput(dir) {
   if (state.mock) return;
   fetch(`${API_BASE_URL}/input`, {
@@ -546,7 +680,6 @@ function onKey(event) {
     return;
   }
 
-  // 1–8 jump straight to a slot. The safest path on stage.
   if (/^[1-8]$/.test(event.key)) {
     event.preventDefault();
     setHighlight(Number(event.key) - 1);
@@ -568,7 +701,20 @@ if ('speechSynthesis' in window) {
   speechSynthesis.addEventListener('voiceschanged', loadVoices);
 }
 
-window.addEventListener('resize', positionSlots);
+mountTargetCursor({
+  spinDuration: 2,
+  hoverDuration: 0.2,
+  parallaxOn: true,
+  cursorColor: '#fbf3e6',
+  cursorColorOnTarget: '#9fc4e8',
+});
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(positionSlots, 90);
+});
+
 document.addEventListener('keydown', onKey);
 document.addEventListener('pointerdown', unlockVoice, { once: true });
 
@@ -578,7 +724,7 @@ els.voiceSelect?.addEventListener('change', (e) => {
     localStorage.setItem(VOICE_KEY, speech.voiceURI);
   } catch {}
   unlockVoice();
-  speak('This is the voice I\'ll use.');
+  speak('This is the voice I will use.');
 });
 
 els.voiceEnable?.addEventListener('click', () => {
@@ -596,9 +742,11 @@ els.regenerate?.addEventListener('click', () => {
   regenerate();
 });
 
-if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  document.querySelectorAll('[data-bg-video]').forEach((v) => v.pause());
-}
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+document.querySelectorAll('[data-bg-video]').forEach((v) => {
+  if (reduced) v.pause();
+  else v.play().catch(() => {});
+});
 
 if (state.mock) {
   if (els.simBadge) els.simBadge.hidden = false;

@@ -1,13 +1,14 @@
 /* ============================================================
-   Whisper — tokens, shell, landing page
-   Palette sampled from the golden-hour cliff still.
-   No purple, no glassmorphism, no drop shadows. See UI-SPEC.md.
+   Whisper — tokens, glass system, shell, landing.
+
+   The background video is shown UNTINTED. Legibility comes from
+   liquid-glass panels that carry their own local contrast, so the
+   film still stays fully visible everywhere around them.
    ============================================================ */
 
 /* ---- Tokens ---------------------------------------------- */
 
 :root {
-  /* Warm near-black through cloud cream */
   --ink-900: #0a0807;
   --ink-800: #131010;
   --ink-700: #1e1815;
@@ -20,18 +21,31 @@
   --haze-100: #f6e6cd;
   --haze-50: #fbf3e6;
 
-  /* The laptop screen. Reserved for live/selected state only. */
+  /* The laptop screen in the still. Live/selected state only. */
   --signal: #9fc4e8;
-  --moss: #46523c;
+
+  /* ---- Liquid glass ---- */
+  --glass-bg: rgba(20, 14, 11, 0.38);
+  --glass-bg-strong: rgba(16, 11, 9, 0.58);
+  --glass-edge: rgba(246, 230, 205, 0.14);
+  --glass-edge-lit: rgba(255, 240, 214, 0.34);
+  --glass-blur: blur(26px) saturate(155%);
+  --glass-sheen: inset 0 1px 0 rgba(255, 246, 230, 0.16);
+  --glass-lift: 0 18px 48px rgba(6, 4, 3, 0.42);
+
+  --r-sm: 12px;
+  --r-md: 20px;
+  --r-lg: 28px;
+  --r-pill: 999px;
 
   --font-display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
   --font-ui: "Public Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
 
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --rule: 1px solid var(--umber-600);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring: cubic-bezier(0.34, 1.4, 0.5, 1);
 
-  --shell-x: clamp(1.5rem, 5vw, 5rem);
+  --shell-x: clamp(1.25rem, 4vw, 3.75rem);
 }
 
 /* ---- Reset ----------------------------------------------- */
@@ -85,9 +99,50 @@ button {
   outline-offset: 3px;
 }
 
+/* ---- Glass primitive ------------------------------------- */
+/* One class, used everywhere. Layered: translucent ground, blurred
+   backdrop, lit top edge, soft lift. */
+
+.glass {
+  position: relative;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-sheen), var(--glass-lift);
+}
+
+/* Specular streak across the top — what sells it as glass and not
+   just a blurred box. */
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    150deg,
+    rgba(255, 248, 236, 0.14) 0%,
+    rgba(255, 248, 236, 0.04) 22%,
+    transparent 46%
+  );
+}
+
+.glass--strong {
+  background: var(--glass-bg-strong);
+}
+
+/* No backdrop-filter (older Firefox) — fall back to solid enough
+   panels that text never loses contrast. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: rgba(12, 9, 7, 0.86);
+  }
+}
+
 /* ---- Shared atoms ---------------------------------------- */
 
-/* Tracked mono caps. Every label in the product uses this. */
 .label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -109,15 +164,15 @@ button {
   border: 0;
 }
 
-/* ---- ParticleText (from the component's own stylesheet) --- */
+/* ---- ParticleText ---------------------------------------- */
 
 .particle-text {
   position: relative;
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 240px;
-  overflow: hidden;
+  min-height: 0;
+  overflow: visible;
   touch-action: none;
   isolation: isolate;
 }
@@ -142,10 +197,19 @@ button {
   border: 0;
 }
 
-/* ---- Background video shell ------------------------------ */
-/* Fixed behind everything. Two scrims: a bottom-up warm gradient
-   for text legibility and a flat wash for overall contrast.
-   If the video 404s this degrades to warm black, still readable. */
+/* Shown only if the ES module never runs (file://, blocked script).
+   Replaced by the canvas on successful mount. */
+.hero__fallback {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(3.4rem, 13vw, 9.5rem);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: var(--haze-50);
+}
+
+/* ---- Background video ------------------------------------ */
+/* Untinted. Only a soft top vignette so the floating nav reads. */
 
 .backdrop {
   position: fixed;
@@ -165,25 +229,80 @@ button {
 .backdrop__scrim {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(
-      to top,
-      var(--ink-900) 0%,
-      rgba(10, 8, 7, 0.82) 28%,
-      rgba(10, 8, 7, 0.28) 62%,
-      rgba(10, 8, 7, 0.1) 100%
-    ),
-    rgba(10, 8, 7, 0.18);
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 8, 7, 0.5) 0%,
+    rgba(10, 8, 7, 0.12) 12%,
+    transparent 30%
+  );
 }
 
-/* Speaker page dims and desaturates further — the tool must win. */
-.backdrop--muted .backdrop__video {
-  filter: saturate(0.7) brightness(0.55);
-  transform: scale(1.04);
+/* ---- Target cursor --------------------------------------- */
+
+.target-cursor-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 9999;
+  mix-blend-mode: difference;
+  transform: translate(-50%, -50%);
 }
 
-.backdrop--muted .backdrop__scrim {
-  background: rgba(10, 8, 7, 0.74);
+.target-cursor-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  background: #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+}
+
+.target-cursor-corner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border: 3px solid #fff;
+  will-change: transform;
+}
+
+.corner-tl {
+  transform: translate(-150%, -150%);
+  border-right: none;
+  border-bottom: none;
+}
+
+.corner-tr {
+  transform: translate(50%, -150%);
+  border-left: none;
+  border-bottom: none;
+}
+
+.corner-br {
+  transform: translate(50%, 50%);
+  border-left: none;
+  border-top: none;
+}
+
+.corner-bl {
+  transform: translate(-150%, 50%);
+  border-right: none;
+  border-top: none;
+}
+
+/* While the custom cursor is live, kill per-element cursor styles
+   so nothing flickers the native pointer back on. */
+body.has-target-cursor,
+body.has-target-cursor * {
+  cursor: none !important;
 }
 
 /* ---- Page shell ------------------------------------------ */
@@ -194,15 +313,17 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  padding: 1rem var(--shell-x) 1.5rem;
+  gap: 1rem;
 }
 
 .topbar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.4rem var(--shell-x);
-  border-bottom: var(--rule);
+  padding: 0.85rem 1.5rem;
+  border-radius: var(--r-pill);
 }
 
 .wordmark {
@@ -215,46 +336,44 @@ button {
 
 .topbar__meta {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--umber-500);
+  color: rgba(246, 230, 205, 0.5);
 }
 
 /* ============================================================
    Landing
-   Hero sits LEFT and LOW. Asymmetry is the main anti-generated
-   signal — generated layouts centre everything.
    ============================================================ */
 
 .hero {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 6rem var(--shell-x) 3.5rem;
-  max-width: 1500px;
-  width: 100%;
+  justify-content: center;
+  gap: 1.75rem;
+  padding: 2.5rem 0 1rem;
 }
 
-/* The particle canvas. Height is fixed so the sampler has a stable
-   box to measure; width is capped so WHISPER never touches the edge. */
+/* Full width now — the old 13em cap was shrinking WHISPER down to a
+   thin dotted outline inside a 442px box. */
 .hero__title {
   width: 100%;
-  max-width: 13em;
-  height: clamp(140px, 22vw, 280px);
-  min-height: 0; /* beat .particle-text's 240px floor on short viewports */
-  margin-left: -0.06em; /* optical: pull the W to the grid line */
+  height: clamp(150px, 21vw, 300px);
   cursor: crosshair;
 }
 
+.hero__panel {
+  align-self: flex-start;
+  max-width: 62ch;
+  padding: 2rem 2.25rem 2.15rem;
+}
+
 .hero__lede {
-  margin-top: 1.6rem;
-  max-width: 56ch;
-  font-size: clamp(1.05rem, 1.6vw, 1.32rem);
+  font-size: clamp(1.05rem, 1.5vw, 1.3rem);
   font-weight: 300;
   line-height: 1.6;
-  color: var(--haze-100);
+  color: var(--haze-50);
 }
 
 .hero__lede em {
@@ -263,36 +382,42 @@ button {
 }
 
 .hero__actions {
-  margin-top: 2.4rem;
+  margin-top: 1.75rem;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1.6rem 2rem;
+  gap: 1rem 1.6rem;
 }
 
-/* One CTA. Not a filled/ghost pair. */
+/* Rounded, glassy, with an amber wash that fills on hover. */
 .cta {
   display: inline-flex;
   align-items: center;
-  gap: 0.9rem;
-  padding: 0.95rem 1.7rem;
-  border: 1px solid var(--ember-300);
+  gap: 0.85rem;
+  padding: 0.9rem 1.75rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(237, 180, 106, 0.5);
+  background: rgba(224, 150, 74, 0.14);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.2);
   color: var(--gold-200);
   font-size: 0.95rem;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   transition: background 0.5s var(--ease), color 0.5s var(--ease),
-    border-color 0.5s var(--ease);
+    border-color 0.5s var(--ease), transform 0.5s var(--spring);
 }
 
 .cta__arrow {
-  transition: transform 0.5s var(--ease);
+  transition: transform 0.5s var(--spring);
 }
 
 .cta:hover,
 .cta:focus-visible {
-  background: var(--ember-300);
-  border-color: var(--ember-300);
-  color: var(--ink-900);
+  background: rgba(237, 180, 106, 0.92);
+  border-color: var(--gold-200);
+  color: #1a1109;
+  transform: translateY(-2px);
 }
 
 .cta:hover .cta__arrow,
@@ -302,49 +427,41 @@ button {
 
 .hero__note {
   font-size: 0.85rem;
-  color: var(--umber-500);
+  color: rgba(246, 230, 205, 0.55);
   max-width: 30ch;
   line-height: 1.5;
 }
 
-/* ---- The four-step strip --------------------------------- */
-/* Film credits, not a feature-card grid. Hairlines only. */
+/* ---- Four-step strip ------------------------------------- */
 
 .sequence {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border-top: var(--rule);
+  gap: 0.85rem;
 }
 
 .step {
-  padding: 1.9rem var(--shell-x) 2.2rem;
-  border-left: var(--rule);
+  padding: 1.5rem 1.5rem 1.65rem;
+  border-radius: var(--r-md);
+  transition: transform 0.55s var(--ease), border-color 0.55s var(--ease);
 }
 
-.step:first-child {
-  border-left: none;
-}
-
-/* Steps inherit the shell gutter only on the outer edges. */
-.step:not(:first-child) {
-  padding-left: 1.6rem;
-}
-
-.step:not(:last-child) {
-  padding-right: 1.6rem;
+.step:hover {
+  transform: translateY(-4px);
+  border-color: var(--glass-edge-lit);
 }
 
 .step__index {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.2em;
-  color: var(--ember-400);
+  color: var(--ember-300);
 }
 
 .step__name {
-  margin-top: 0.5rem;
+  margin-top: 0.45rem;
   font-family: var(--font-display);
-  font-size: 1.55rem;
+  font-size: 1.6rem;
   font-weight: 300;
   letter-spacing: 0.03em;
   color: var(--haze-50);
@@ -352,44 +469,39 @@ button {
 
 .step__body {
   margin-top: 0.5rem;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.55;
-  color: rgba(246, 230, 205, 0.62);
+  color: rgba(246, 230, 205, 0.68);
 }
 
 .footline {
-  padding: 1.1rem var(--shell-x) 1.6rem;
-  border-top: var(--rule);
+  padding: 0.4rem 0.5rem 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--umber-500);
+  color: rgba(246, 230, 205, 0.42);
 }
 
-/* ---- Landing responsive ---------------------------------- */
+/* ---- Responsive ------------------------------------------ */
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .sequence {
     grid-template-columns: repeat(2, 1fr);
   }
+}
 
-  .step {
-    padding: 1.5rem var(--shell-x);
-    border-left: none;
-    border-top: var(--rule);
+@media (max-width: 560px) {
+  .sequence {
+    grid-template-columns: 1fr;
   }
 
-  .step:nth-child(2n) {
-    border-left: var(--rule);
+  .hero__panel {
+    padding: 1.5rem 1.4rem;
   }
 
-  .step:nth-child(-n + 2) {
-    border-top: none;
-  }
-
-  .hero {
-    padding-top: 3rem;
+  .topbar__meta {
+    display: none;
   }
 }
 

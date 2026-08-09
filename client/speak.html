@@ -15,8 +15,8 @@
 </head>
 <body>
 
-  <!-- Same still, dimmed hard. The tool has to win the contrast fight. -->
-  <div class="backdrop backdrop--muted">
+  <!-- Same still, untinted. Contrast comes from the glass, not a wash. -->
+  <div class="backdrop">
     <video
       class="backdrop__video"
       autoplay muted loop playsinline
@@ -30,20 +30,20 @@
 
   <div class="speaker">
 
-    <header class="speaker__bar">
+    <header class="speaker__bar glass">
       <div class="speaker__brand">
         <span class="wordmark">Whisper</span>
-        <a class="speaker__back" href="index.html">&#8592; Back</a>
+        <a class="speaker__back cursor-target" href="index.html">&#8592; Back</a>
         <span class="badge-sim" data-sim-badge hidden>Simulated</span>
       </div>
 
       <div class="statusbar">
         <span class="pill" data-pill="device"><span class="pill__dot"></span>Device</span>
         <span class="pill" data-pill="server"><span class="pill__dot"></span>Server</span>
-        <button class="pill" data-pill="voice" data-actionable type="button" data-voice-enable>
+        <button class="pill cursor-target" data-pill="voice" data-actionable type="button" data-voice-enable>
           <span class="pill__dot"></span><span data-voice-label>Voice</span>
         </button>
-        <select class="voice-select" data-voice-select aria-label="Speech voice"></select>
+        <select class="voice-select cursor-target" data-voice-select aria-label="Speech voice"></select>
       </div>
     </header>
 
@@ -52,13 +52,16 @@
       <section class="stage">
         <p class="label stage__hint">Nudge to choose &middot; press to speak</p>
 
-        <!-- Eight fixed compass slots. Positions are written by speak.js. -->
         <div
           class="ring"
           data-ring
           role="listbox"
           aria-label="Predicted things to say"
           tabindex="0">
+
+          <!-- Flows between slots. Uniform slot size means it only
+               translates, which is what keeps the motion liquid. -->
+          <div class="ring__lens" data-lens aria-hidden="true"></div>
 
           <div class="hub" data-hub>
             <span class="hub__dir" data-hub-dir aria-hidden="true">&middot;</span>
@@ -68,8 +71,7 @@
         </div>
       </section>
 
-      <!-- Makes the agent visible instead of a black box. -->
-      <aside class="rail" aria-label="Agent state">
+      <aside class="rail glass" aria-label="Agent state">
         <div class="rail__block">
           <p class="label">Context</p>
           <div data-context></div>
@@ -84,13 +86,13 @@
     </div>
 
     <footer>
-      <div class="utterance">
+      <div class="utterance glass glass--strong">
         <p class="utterance__text" data-utterance data-idle="true" aria-live="polite">
           Waiting for a nudge.
         </p>
         <div class="utterance__actions">
-          <button class="ghost" type="button" data-speak-again>Speak again</button>
-          <button class="ghost ghost--warn" type="button" data-regenerate>Not what I meant</button>
+          <button class="ghost cursor-target" type="button" data-speak-again>Speak again</button>
+          <button class="ghost ghost--warn cursor-target" type="button" data-regenerate>Not what I meant</button>
         </div>
       </div>
       <p class="keyhint">

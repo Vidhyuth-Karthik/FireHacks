@@ -82,10 +82,18 @@ The background video already moves. Everything else is nearly still.
 The brief said avoid the look of an AI-vibecoded UI. Concretely, these are the
 tells, and the counter-move each time:
 
+> **Revision.** The build now uses **liquid glass** panels and rounded
+> geometry by explicit request. Glass is doing a real job here: the
+> background video is shown *untinted*, so legibility has to come from
+> panels that carry their own local contrast rather than from a wash over
+> the whole film still. The rest of the anti-generic direction stands, and
+> the glass is tuned warm (amber-tinted, specular top edge) rather than the
+> default cold white frost.
+
 | The tell | Why it reads as generated | What we do instead |
 | --- | --- | --- |
 | Violet→indigo gradient (`#8b5cf6`→`#6366f1`) | The default accent of every scaffold. *(Note: this is `ParticleText`'s default `highlightColor` — we override it to amber.)* | Amber/honey from the still. Zero purple in the build. |
-| `bg-white/10 backdrop-blur-xl rounded-2xl border-white/20` cards | Glassmorphism everywhere, content floating in frosted boxes | No blur panels. Type sits **directly on the video** over a gradient scrim. Structure comes from 1px warm hairlines. |
+| `bg-white/10 backdrop-blur-xl` frost on a flat dark page | Cold white glass floating on nothing, used as decoration | Warm glass (`rgba(20,14,11,·)`) with a specular top streak, floating on **real moving footage** it actually refracts. Panels earn their place by solving contrast. |
 | Gradient-filled heading text | `bg-clip-text` on the h1 | Solid cream. The particles *are* the effect. |
 | Inter / Space Grotesk for everything | One neutral grotesque at every size | Three-face system: serif display, accessible sans, mono telemetry. |
 | ✨ emoji in headings and buttons | Emoji as iconography | No emoji anywhere in the product. |
@@ -195,8 +203,13 @@ top-left" and stops reading.
 - **R2.2** A slot's screen position never changes. Fewer than 8 items leaves
   slots empty rather than reflowing — positional memory is the accessibility
   win, and reflow would destroy it.
-- **R2.3** Highlighted option: `--signal` text, thin `--signal` ring, a soft
-  outer glow, and the 2.4s breathe. Everything else drops to 55% opacity.
+- **R2.3** Selection is a single glass **lens** (`.ring__lens`) that *flows*
+  between slots, not a highlight class toggling per slot. Because every slot
+  is the same size, the lens only ever translates — no width/height
+  animation, no reflow, which is what removes the choppiness. It squashes
+  slightly mid-flight (`scale(1.07, 0.9)`) so it reads as liquid rather than
+  a box teleporting. The active slot drops its own glass so you never get two
+  stacked panes.
 - **R2.4** Centre hub shows the last direction received and pulses on `press`,
   so the room can see the hardware working even when a nudge changes nothing.
 - **R2.5** Ellipse radii are CSS custom properties, so the ring shrinks on
@@ -303,9 +316,10 @@ This is an AAC device. These are requirements, not polish.
 client/
   index.html        landing
   speak.html        speaker tool
-  style.css         tokens, shell, landing
-  speak.css         speaker page
+  style.css         tokens, glass system, shell, landing
+  speak.css         speaker page + liquid ring
   particle-text.js  vanilla port of the React component
+  target-cursor.js  vanilla port; GSAP via CDN, degrades to native cursor
   speak.js          WS client, mock agent, input, TTS
   config.js         API/WS resolution
   login.html        preserved from the starter kit
