@@ -15,3 +15,6 @@ Thumbs.db
 
 # Local scratch
 *.log
+
+# Kokoro TTS model weights (~340MB) - downloaded, not committed
+api/models/
