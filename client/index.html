@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log In - Hackathon Starter Kit</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="auth-card">
+    <h1>Hackathon Starter Kit</h1>
+
+    <div class="tabs">
+      <button type="button" class="tab-button active" data-tab="login">Log In</button>
+      <button type="button" class="tab-button" data-tab="signup">Sign Up</button>
+    </div>
+
+    <form id="login-form" class="tab-panel">
+      <label for="login-user-id">User ID</label>
+      <input type="text" id="login-user-id" required autocomplete="username">
+
+      <label for="login-password">Password</label>
+      <input type="password" id="login-password" required autocomplete="current-password">
+
+      <button type="submit">Log In</button>
+    </form>
+
+    <form id="signup-form" class="tab-panel hidden">
+      <label for="signup-user-id">User ID</label>
+      <input type="text" id="signup-user-id" required autocomplete="username">
+
+      <label for="signup-password">Password</label>
+      <input type="password" id="signup-password" required autocomplete="new-password">
+
+      <button type="submit">Create Account</button>
+    </form>
+
+    <p id="message" class="message"></p>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
