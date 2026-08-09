@@ -1,0 +1,392 @@
+/* ============================================================
+   Whisper — voice studio.
+   Reuses the glass system and tokens from style.css.
+   ============================================================ */
+
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.navlink {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(246, 230, 205, 0.55);
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  transition: color 0.4s var(--ease), border-color 0.4s var(--ease),
+    background 0.4s var(--ease);
+}
+
+.navlink:hover,
+.navlink:focus-visible {
+  color: var(--gold-200);
+  border-color: rgba(237, 180, 106, 0.4);
+  background: rgba(224, 150, 74, 0.12);
+}
+
+.navlink--current {
+  color: var(--haze-50);
+  border-color: rgba(246, 230, 205, 0.18);
+  background: rgba(246, 230, 205, 0.06);
+}
+
+/* ---- Layout ---------------------------------------------- */
+
+.studio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0 1rem;
+}
+
+.studio__intro {
+  width: min(760px, 100%);
+}
+
+.studio__title {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  color: var(--haze-50);
+}
+
+.studio__sub {
+  margin-top: 0.7rem;
+  max-width: 60ch;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: rgba(246, 230, 205, 0.72);
+}
+
+.panel {
+  width: min(760px, 100%);
+  padding: 1.9rem 1.9rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+/* ---- Fields ---------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.field--inline {
+  flex: 1;
+  min-width: 200px;
+}
+
+.field__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.counter {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: rgba(246, 230, 205, 0.42);
+  transition: color 0.35s var(--ease);
+}
+
+.counter[data-over="true"] {
+  color: var(--ember-300);
+}
+
+.textarea,
+.select {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 300;
+  color: var(--haze-50);
+  background: rgba(12, 8, 7, 0.55);
+  border: 1px solid rgba(246, 230, 205, 0.14);
+  border-radius: var(--r-md);
+  padding: 0.9rem 1rem;
+  transition: border-color 0.4s var(--ease), background 0.4s var(--ease);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 128px;
+  line-height: 1.55;
+}
+
+.textarea::placeholder {
+  color: rgba(246, 230, 205, 0.32);
+}
+
+.textarea:hover,
+.select:hover {
+  border-color: rgba(246, 230, 205, 0.26);
+}
+
+.textarea:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-color: transparent;
+}
+
+.select {
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+}
+
+.select optgroup {
+  background: var(--ink-800);
+  color: var(--ember-300);
+}
+
+.select option {
+  background: var(--ink-800);
+  color: var(--haze-50);
+}
+
+.controls {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+/* ---- Speed range ----------------------------------------- */
+
+.speed-out {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--haze-50);
+  margin-left: 0.45rem;
+}
+
+.range {
+  width: 100%;
+  height: 30px;
+  background: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.range:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 4px;
+  border-radius: var(--r-pill);
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: rgba(246, 230, 205, 0.18);
+}
+
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: rgba(246, 230, 205, 0.18);
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--gold-300);
+  border: 1px solid rgba(255, 246, 230, 0.5);
+  box-shadow: 0 0 16px rgba(237, 180, 106, 0.45);
+}
+
+.range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gold-300);
+  border: 1px solid rgba(255, 246, 230, 0.5);
+  box-shadow: 0 0 16px rgba(237, 180, 106, 0.45);
+}
+
+/* ---- Actions --------------------------------------------- */
+
+.actions {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(246, 230, 205, 0.18);
+  background: rgba(246, 230, 205, 0.06);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--haze-50);
+  transition: border-color 0.42s var(--ease), background 0.42s var(--ease),
+    color 0.42s var(--ease), transform 0.42s var(--spring), opacity 0.3s var(--ease);
+}
+
+.btn:hover:not(:disabled),
+.btn:focus-visible:not(:disabled) {
+  border-color: rgba(237, 180, 106, 0.55);
+  background: rgba(224, 150, 74, 0.18);
+  color: var(--gold-200);
+  transform: translateY(-2px);
+}
+
+.btn--primary {
+  border-color: rgba(237, 180, 106, 0.55);
+  background: rgba(224, 150, 74, 0.2);
+  color: var(--gold-200);
+}
+
+.btn--primary:hover:not(:disabled),
+.btn--primary:focus-visible:not(:disabled) {
+  background: rgba(237, 180, 106, 0.92);
+  color: #1a1109;
+}
+
+.btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn[hidden] {
+  display: none;
+}
+
+/* Busy spinner on the generate button */
+.btn[data-busy="true"]::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(237, 180, 106, 0.35);
+  border-top-color: var(--gold-200);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Status ---------------------------------------------- */
+
+.status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+  padding: 0.7rem 0.95rem;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(246, 230, 205, 0.1);
+  background: rgba(12, 8, 7, 0.4);
+  color: rgba(246, 230, 205, 0.6);
+  transition: color 0.35s var(--ease), border-color 0.35s var(--ease),
+    background 0.35s var(--ease);
+}
+
+.status[data-kind="loading"] {
+  color: var(--gold-200);
+  border-color: rgba(237, 180, 106, 0.35);
+  background: rgba(224, 150, 74, 0.1);
+}
+
+.status[data-kind="success"] {
+  color: var(--signal);
+  border-color: rgba(159, 196, 232, 0.35);
+  background: rgba(159, 196, 232, 0.1);
+}
+
+.status[data-kind="error"] {
+  color: #f0a98a;
+  border-color: rgba(200, 90, 60, 0.45);
+  background: rgba(180, 70, 45, 0.14);
+}
+
+/* ---- Player ---------------------------------------------- */
+
+/* Native controls on purpose - they are keyboard and screen-reader
+   accessible for free. Chrome only lets us restyle the panel behind
+   them, which is enough to stop the default white bar clashing. */
+.player {
+  width: 100%;
+  border-radius: var(--r-pill);
+  background: rgba(12, 8, 7, 0.5);
+  color-scheme: dark;
+}
+
+.player::-webkit-media-controls-panel {
+  background: rgba(24, 17, 13, 0.92);
+}
+
+.player::-webkit-media-controls-current-time-display,
+.player::-webkit-media-controls-time-remaining-display {
+  color: var(--haze-100);
+  text-shadow: none;
+}
+
+.player:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+/* ---- Responsive ------------------------------------------ */
+
+@media (max-width: 620px) {
+  .panel {
+    padding: 1.35rem 1.2rem;
+  }
+
+  .controls {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .actions .btn {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .topbar__nav {
+    gap: 0.15rem;
+  }
+
+  .navlink {
+    padding: 0.35rem 0.55rem;
+    font-size: 9.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn[data-busy="true"]::before {
+    animation: none;
+  }
+}

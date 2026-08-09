@@ -1,0 +1,43 @@
+# Local development stack: the Kokoro text-to-speech server plus this API.
+#
+#   docker compose up kokoro     # just the TTS server (most common)
+#   docker compose up            # TTS server + API together
+#
+# The client is static files - serve it separately with:
+#   cd client && python -m http.server 5500
+
+services:
+  # Self-hosted text to speech. No per-character fees, but it does need
+  # a machine to run on: roughly 2 GB RAM and a couple of CPU cores for
+  # the CPU image. First start pulls ~2 GB of model weights.
+  kokoro:
+    # Swap to ghcr.io/remsky/kokoro-fastapi-gpu:latest if you have an
+    # NVIDIA GPU and the container toolkit installed - it is much faster.
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: whisper-kokoro
+    ports:
+      - "8880:8880"
+    restart: unless-stopped
+    healthcheck:
+      # /web is the built-in test UI; it responds once the model is loaded.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8880/web >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+
+  api:
+    build: ./api
+    container_name: whisper-api
+    ports:
+      - "8000:7860"
+    env_file:
+      - ./api/.env
+    environment:
+      # Inside the compose network the TTS server is reachable by service
+      # name, so this overrides whatever .env says for localhost use.
+      TTS_BASE_URL: http://kokoro:8880/v1
+    depends_on:
+      kokoro:
+        condition: service_started
+    restart: unless-stopped

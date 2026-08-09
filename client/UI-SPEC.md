@@ -251,9 +251,10 @@ Consumed over WebSocket `/ws`:
 - **R2.11 Connection pills.** `DEVICE` / `SERVER` / `VOICE`, each green when
   live, amber when degraded, dim when down. A judge can see at a glance which
   parts are real.
-- **R2.12 Voice unlock.** Browsers refuse `speechSynthesis` before a user
-  gesture. First interaction primes it silently; until then `VOICE` shows amber
-  with a "click to enable" affordance.
+- **R2.12 Voice unlock.** Autoplay policy blocks programmatic `audio.play()`
+  before a user gesture. The first interaction "blesses" the audio element
+  (muted play → pause) so later joystick-driven playback is allowed; until
+  then `VOICE` shows amber with a "click to enable" affordance.
 - **R2.13 Voice picker** in the header, persisted to `localStorage`, so the
   voice can be chosen during rehearsal instead of during the demo.
 
@@ -271,8 +272,11 @@ from a hardcoded demo in a judge's mind.
 
 ### 4.6 Speech
 
-- **R2.17** `speechSynthesis.speak()` on `state:"speak"`, plus a manual
-  **Speak again** control (demos need repeats).
+- **R2.17** On `state:"speak"`, `tts.js` POSTs to our backend `/api/tts`, which
+  forwards to the self-hosted **Kokoro FastAPI** server; the returned audio
+  becomes a Blob URL on a hidden `<audio>` element. A manual **Speak again**
+  control replays the last sentence (demos need repeats). The browser's
+  `speechSynthesis` is deliberately not used — see [TTS-SETUP.md](../TTS-SETUP.md).
 - **R2.18** The sentence is also rendered in `aria-live="polite"` — for a screen
   reader user *and* so it survives a muted laptop.
 - **R2.19** Cancel any in-flight utterance before speaking a new one.

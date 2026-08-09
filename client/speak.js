@@ -17,6 +17,7 @@
 
 import { WS_URL, API_BASE_URL, FORCE_MOCK } from './config.js';
 import { mountTargetCursor } from './target-cursor.js';
+import { TtsSession, TtsError, fetchVoiceConfig } from './tts.js';
 
 /* ---- Geometry -------------------------------------------- */
 /* Clockwise from top. A slot's position NEVER changes; each also owns
@@ -50,6 +51,7 @@ const els = {
   voiceLabel: document.querySelector('[data-voice-label]'),
   speakAgain: document.querySelector('[data-speak-again]'),
   regenerate: document.querySelector('[data-regenerate]'),
+  audio: document.querySelector('[data-audio]'),
 };
 
 /* ---- State ----------------------------------------------- */
@@ -272,95 +274,102 @@ function setHub(glyph, label, { pulse = false, thinking = false } = {}) {
 }
 
 /* ---- Speech ---------------------------------------------- */
-const speech = { ready: false, voices: [], voiceURI: null };
-const VOICE_KEY = 'whisper.voice';
+/* Audio comes from the self-hosted Kokoro server via our own backend
+   (see tts.js). The browser's speechSynthesis is deliberately unused. */
 
-/* Pick something that sounds like a person, not a 2005 screen reader.
-   Higher score wins when nothing is stored. */
-function scoreVoice(v) {
-  const n = v.name.toLowerCase();
-  let s = 0;
-  if (n.includes('natural')) s += 60;        // Microsoft *Natural
-  if (n.includes('google')) s += 45;
-  if (/samantha|ava|serena|allison|karen|moira|daniel|siri/.test(n)) s += 40;
-  if (v.localService === false) s += 12;     // cloud voices are usually better
-  if (/desktop|espeak|compact/.test(n)) s -= 40;
-  if (v.lang === 'en-GB' || v.lang === 'en-US') s += 8;
-  return s;
-}
+const tts = new TtsSession(els.audio, { timeoutMs: 45000 });
+const speech = { ready: false, voice: null, config: null };
+const VOICE_KEY = 'whisper.kokoro.voice';
 
-function loadVoices() {
-  if (!('speechSynthesis' in window)) {
-    setPill('voice', 'down');
-    if (els.voiceLabel) els.voiceLabel.textContent = 'No voice';
-    return;
-  }
+async function loadVoices() {
+  speech.config = await fetchVoiceConfig();
 
-  speech.voices = speechSynthesis
-    .getVoices()
-    .filter((v) => v.lang.startsWith('en'))
-    .sort((a, b) => scoreVoice(b) - scoreVoice(a));
-
-  if (!speech.voices.length) return;
-
-  if (!speech.voiceURI) {
-    try {
-      speech.voiceURI = localStorage.getItem(VOICE_KEY);
-    } catch {}
-  }
-  // Nothing stored, or the stored voice is gone: take the best available.
-  if (!speech.voiceURI || !speech.voices.some((v) => v.voiceURI === speech.voiceURI)) {
-    speech.voiceURI = speech.voices[0].voiceURI;
-  }
+  let stored = null;
+  try {
+    stored = localStorage.getItem(VOICE_KEY);
+  } catch {}
+  const known = speech.config.voices.some((v) => v.id === stored);
+  speech.voice = known ? stored : speech.config.defaultVoice;
 
   if (els.voiceSelect) {
     els.voiceSelect.innerHTML = '';
-    speech.voices.forEach((v) => {
-      const opt = document.createElement('option');
-      opt.value = v.voiceURI;
-      opt.textContent = v.name;
-      els.voiceSelect.append(opt);
-    });
-    els.voiceSelect.value = speech.voiceURI;
+    const groups = new Map();
+    for (const voice of speech.config.voices) {
+      const key = voice.group || 'Voices';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(voice);
+    }
+    for (const [groupName, list] of groups) {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = groupName;
+      for (const voice of list) {
+        const option = document.createElement('option');
+        option.value = voice.id;
+        option.textContent = voice.label || voice.id;
+        optgroup.append(option);
+      }
+      els.voiceSelect.append(optgroup);
+    }
+    els.voiceSelect.value = speech.voice;
+  }
+
+  if (!speech.config.online) {
+    trace('voice list unavailable — using built-in list', 'reject');
   }
 }
 
-/* Browsers refuse speechSynthesis before a user gesture — prime it once. */
+/* Autoplay policy blocks programmatic play() until the user has
+   interacted. "Bless" the element once on the first gesture so later
+   playback (driven by the joystick, not a click) is allowed. */
 function unlockVoice() {
-  if (speech.ready || !('speechSynthesis' in window)) return;
-  const warmup = new SpeechSynthesisUtterance(' ');
-  warmup.volume = 0;
-  speechSynthesis.speak(warmup);
+  if (speech.ready) return;
   speech.ready = true;
+
+  if (els.audio) {
+    els.audio.muted = true;
+    els.audio
+      .play()
+      .then(() => {
+        els.audio.pause();
+        els.audio.currentTime = 0;
+        els.audio.muted = false;
+      })
+      .catch(() => {
+        els.audio.muted = false;
+      });
+  }
+
   setPill('voice', 'live');
   if (els.voiceLabel) els.voiceLabel.textContent = 'Voice';
   trace('voice unlocked');
 }
 
-function speak(text) {
+async function speak(text) {
   if (!text) return;
   state.lastSpoken = text;
 
-  if (!('speechSynthesis' in window)) {
-    trace('speechSynthesis unavailable', 'reject');
-    return;
-  }
   if (!speech.ready) {
     setPill('voice', 'degraded');
     if (els.voiceLabel) els.voiceLabel.textContent = 'Click to enable';
     return;
   }
 
-  speechSynthesis.cancel(); // never stack utterances
-  const utter = new SpeechSynthesisUtterance(text);
-  const voice = speech.voices.find((v) => v.voiceURI === speech.voiceURI);
-  if (voice) {
-    utter.voice = voice;
-    utter.lang = voice.lang;
+  try {
+    await tts.speak({
+      text,
+      voice: speech.voice || speech.config?.defaultVoice,
+      speed: 1.0,
+      autoplay: true,
+      maxChars: speech.config?.maxChars ?? 2000,
+    });
+    setPill('voice', 'live');
+  } catch (error) {
+    if (!(error instanceof TtsError)) throw error;
+    if (error.kind === 'aborted') return; // superseded by a newer utterance
+
+    setPill('voice', 'degraded');
+    trace(`speech failed: ${error.message}`, 'reject');
   }
-  utter.rate = 0.94; // unhurried — this is somebody speaking, not an alert
-  utter.pitch = 1.02;
-  speechSynthesis.speak(utter);
 }
 
 function showUtterance(text) {
@@ -697,9 +706,6 @@ setPill('voice', 'degraded');
 if (els.voiceLabel) els.voiceLabel.textContent = 'Click to enable';
 
 loadVoices();
-if ('speechSynthesis' in window) {
-  speechSynthesis.addEventListener('voiceschanged', loadVoices);
-}
 
 mountTargetCursor({
   spinDuration: 2,
@@ -719,13 +725,16 @@ document.addEventListener('keydown', onKey);
 document.addEventListener('pointerdown', unlockVoice, { once: true });
 
 els.voiceSelect?.addEventListener('change', (e) => {
-  speech.voiceURI = e.target.value;
+  speech.voice = e.target.value;
   try {
-    localStorage.setItem(VOICE_KEY, speech.voiceURI);
+    localStorage.setItem(VOICE_KEY, speech.voice);
   } catch {}
   unlockVoice();
   speak('This is the voice I will use.');
 });
+
+/* Blob URLs outlive the page unless we let them go. */
+window.addEventListener('pagehide', () => tts.dispose());
 
 els.voiceEnable?.addEventListener('click', () => {
   unlockVoice();
