@@ -17,7 +17,7 @@ load_dotenv()
 
 TURSO_DATABASE_URL = os.environ["TURSO_DATABASE_URL"]
 TURSO_AUTH_TOKEN = os.environ["TURSO_AUTH_TOKEN"]
-
+#hi
 
 def get_connection():
     """Open a new connection to the Turso database.

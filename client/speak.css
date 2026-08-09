@@ -1,0 +1,632 @@
+/* ============================================================
+   Whisper — speaker page.
+
+   The ring mirrors the joystick's eight physical positions 1:1, so a
+   slot's place on screen never changes. Selection is shown by a single
+   glass "lens" that FLOWS between slots rather than each slot toggling
+   a highlight class — that's what removes the choppiness.
+   ============================================================ */
+
+.speaker {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem var(--shell-x) 1.9rem;
+}
+
+/* ---- Header ---------------------------------------------- */
+
+.speaker__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 1.25rem;
+  border-radius: var(--r-pill);
+}
+
+.speaker__brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.speaker__back {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(246, 230, 205, 0.55);
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  transition: color 0.4s var(--ease), border-color 0.4s var(--ease),
+    background 0.4s var(--ease);
+}
+
+.speaker__back:hover {
+  color: var(--gold-200);
+  border-color: rgba(237, 180, 106, 0.4);
+  background: rgba(224, 150, 74, 0.12);
+}
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(246, 230, 205, 0.1);
+  background: rgba(246, 230, 205, 0.04);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(246, 230, 205, 0.5);
+  transition: color 0.45s var(--ease), border-color 0.45s var(--ease),
+    background 0.45s var(--ease);
+}
+
+.pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(246, 230, 205, 0.35);
+  transition: background 0.45s var(--ease), box-shadow 0.45s var(--ease);
+}
+
+.pill[data-state="live"] {
+  color: var(--haze-50);
+  border-color: rgba(159, 196, 232, 0.4);
+  background: rgba(159, 196, 232, 0.12);
+}
+
+.pill[data-state="live"] .pill__dot {
+  background: var(--signal);
+  box-shadow: 0 0 10px rgba(159, 196, 232, 0.8);
+}
+
+.pill[data-state="degraded"] {
+  color: var(--gold-200);
+  border-color: rgba(224, 150, 74, 0.42);
+  background: rgba(224, 150, 74, 0.12);
+}
+
+.pill[data-state="degraded"] .pill__dot {
+  background: var(--ember-300);
+  box-shadow: 0 0 9px rgba(224, 150, 74, 0.7);
+}
+
+.pill[data-actionable] {
+  cursor: pointer;
+}
+
+.voice-select {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--haze-100);
+  background: rgba(16, 11, 9, 0.8);
+  border: 1px solid rgba(246, 230, 205, 0.14);
+  border-radius: var(--r-pill);
+  padding: 0.42rem 0.8rem;
+  max-width: 170px;
+}
+
+.badge-sim {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ember-300);
+  border: 1px solid rgba(224, 150, 74, 0.5);
+  background: rgba(224, 150, 74, 0.12);
+  border-radius: var(--r-pill);
+  padding: 0.3rem 0.7rem;
+}
+
+.badge-sim[hidden] {
+  display: none;
+}
+
+/* ---- Body split ------------------------------------------ */
+
+.speaker__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 0.9rem;
+  min-height: 0;
+}
+
+/* Deliberately NOT a glass panel — a slab here would blur out the whole
+   centre of the film still. The slots carry their own glass and float
+   directly on the video. */
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  min-height: 0;
+}
+
+.stage__hint {
+  position: absolute;
+  top: 1.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(246, 230, 205, 0.45);
+}
+
+/* ---- The ring -------------------------------------------- */
+
+.ring {
+  --rx: 340px;
+  --ry: 215px;
+  --slot-w: 236px;
+  --slot-h: 92px;
+  position: relative;
+  width: calc(var(--rx) * 2 + var(--slot-w));
+  height: calc(var(--ry) * 2 + var(--slot-h));
+  max-width: 100%;
+}
+
+@media (max-width: 1500px) {
+  .ring {
+    --rx: 290px;
+    --ry: 190px;
+    --slot-w: 210px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .ring {
+    --rx: 240px;
+    --ry: 168px;
+    --slot-w: 186px;
+    --slot-h: 84px;
+  }
+}
+
+/* The flowing lens. All slots are the same size, so this only ever
+   translates — no width/height animation, no layout thrash, no jank. */
+.ring__lens {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--slot-w);
+  height: var(--slot-h);
+  margin-left: calc(var(--slot-w) / -2);
+  margin-top: calc(var(--slot-h) / -2);
+  border-radius: var(--r-md);
+  background: rgba(159, 196, 232, 0.24);
+  -webkit-backdrop-filter: blur(20px) saturate(190%);
+  backdrop-filter: blur(20px) saturate(190%);
+  border: 1.5px solid rgba(178, 210, 240, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(233, 245, 255, 0.45),
+    0 0 60px rgba(159, 196, 232, 0.45),
+    0 0 0 6px rgba(159, 196, 232, 0.08);
+  transform: translate(var(--lx, 0px), var(--ly, 0px));
+  transition:
+    transform 620ms var(--spring),
+    opacity 400ms var(--ease);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ring__lens[data-visible="true"] {
+  opacity: 1;
+}
+
+/* Mid-flight squash. Gives the lens weight — it reads as liquid
+   rather than a box teleporting between positions. */
+.ring__lens[data-moving="true"] {
+  transform: translate(var(--lx, 0px), var(--ly, 0px)) scale(1.07, 0.9);
+}
+
+.slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  /* --x/--y written by speak.js from the ellipse maths */
+  transform: translate(-50%, -50%) translate(var(--x, 0px), var(--y, 0px));
+  width: var(--slot-w);
+  min-height: var(--slot-h);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  text-align: center;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(246, 230, 205, 0.12);
+  background: rgba(18, 12, 10, 0.46);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.13), 0 10px 30px rgba(6, 4, 3, 0.34);
+  color: rgba(246, 230, 205, 0.82);
+  font-size: 1.02rem;
+  line-height: 1.3;
+  transition:
+    color 450ms var(--ease),
+    opacity 450ms var(--ease),
+    border-color 450ms var(--ease),
+    background 450ms var(--ease),
+    transform 620ms var(--spring);
+}
+
+.slot__key {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: rgba(246, 230, 205, 0.4);
+  transition: color 450ms var(--ease);
+}
+
+.slot[data-empty="true"] {
+  opacity: 0.18;
+}
+
+/* The lens supplies the surface for the active slot, so the slot's own
+   glass steps aside — otherwise you get two stacked panes. */
+.slot[aria-selected="true"] {
+  color: #f2f8ff;
+  font-weight: 400;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: 0 1px 12px rgba(10, 26, 42, 0.55);
+  transform: translate(-50%, -50%) translate(var(--x, 0px), var(--y, 0px)) scale(1.07);
+}
+
+.slot[aria-selected="true"] .slot__key {
+  color: var(--signal);
+}
+
+/* Options arriving from a new prediction rise into place in compass
+   order, so a re-predict reads as a deliberate event. */
+@keyframes slot-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(var(--x, 0px), var(--y, 0px)) scale(0.9);
+  }
+}
+
+.slot[data-enter="true"] {
+  animation: slot-in 620ms var(--spring) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* ---- Centre hub ------------------------------------------ */
+
+.hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  width: 138px;
+  height: 138px;
+  border-radius: 50%;
+  border: 1px solid rgba(246, 230, 205, 0.16);
+  background: rgba(20, 14, 11, 0.42);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 230, 0.16);
+  display: grid;
+  place-items: center;
+  gap: 0.15rem;
+  text-align: center;
+  transition:
+    border-color 450ms var(--ease),
+    box-shadow 450ms var(--ease),
+    transform 520ms var(--spring);
+}
+
+.hub__dir {
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--gold-200);
+  transition: color 400ms var(--ease), transform 420ms var(--spring);
+}
+
+.hub__state {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(246, 230, 205, 0.45);
+  transition: color 400ms var(--ease);
+}
+
+.hub[data-pulse="true"] {
+  border-color: rgba(159, 196, 232, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(233, 245, 255, 0.3),
+    0 0 52px rgba(159, 196, 232, 0.34);
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.hub[data-thinking="true"] {
+  border-color: rgba(224, 150, 74, 0.5);
+}
+
+.hub[data-thinking="true"] .hub__state {
+  color: var(--ember-300);
+}
+
+.hub[data-thinking="true"] .hub__dir {
+  animation: hub-think 1.4s ease-in-out infinite;
+}
+
+@keyframes hub-think {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* ---- Brain rail ------------------------------------------ */
+
+.rail {
+  border-radius: var(--r-lg);
+  padding: 1.25rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  min-height: 0;
+}
+
+.rail__block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+}
+
+.rail__block--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.context-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.84rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(246, 230, 205, 0.07);
+}
+
+.context-row__key {
+  color: rgba(246, 230, 205, 0.42);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding-top: 0.22rem;
+}
+
+.context-row__val {
+  color: var(--haze-100);
+  text-align: right;
+}
+
+.trace {
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.8;
+  color: rgba(246, 230, 205, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(246, 230, 205, 0.2) transparent;
+}
+
+.trace__line {
+  animation: trace-in 420ms var(--ease) backwards;
+}
+
+@keyframes trace-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+
+.trace__line time {
+  color: rgba(246, 230, 205, 0.3);
+  margin-right: 0.55rem;
+}
+
+.trace__line[data-kind="reject"] {
+  color: var(--ember-300);
+}
+
+.trace__line[data-kind="speak"] {
+  color: var(--signal);
+}
+
+/* ---- Utterance bar --------------------------------------- */
+
+.utterance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+  padding: 1.25rem 1.75rem 1.35rem;
+  border-radius: var(--r-lg);
+}
+
+.utterance__text {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3.2vw, 2.7rem);
+  font-weight: 300;
+  line-height: 1.2;
+  color: var(--haze-50);
+  flex: 1;
+  min-width: 240px;
+  transition: color 400ms var(--ease);
+}
+
+.utterance__text[data-idle="true"] {
+  color: rgba(246, 230, 205, 0.35);
+}
+
+/* Each new sentence eases up into place rather than snapping. */
+.utterance__text[data-fresh="true"] {
+  animation: utter-in 620ms var(--spring);
+}
+
+@keyframes utter-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.utterance__actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.ghost {
+  padding: 0.62rem 1.15rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(246, 230, 205, 0.16);
+  background: rgba(246, 230, 205, 0.05);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--haze-100);
+  transition:
+    border-color 420ms var(--ease),
+    color 420ms var(--ease),
+    background 420ms var(--ease),
+    transform 420ms var(--spring);
+}
+
+.ghost:hover {
+  border-color: rgba(237, 180, 106, 0.55);
+  background: rgba(224, 150, 74, 0.16);
+  color: var(--gold-200);
+  transform: translateY(-2px);
+}
+
+.ghost--warn:hover {
+  border-color: rgba(200, 118, 47, 0.65);
+  color: var(--ember-300);
+}
+
+.keyhint {
+  padding: 0.1rem 0.5rem 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(246, 230, 205, 0.35);
+}
+
+/* ---- Responsive ------------------------------------------ */
+
+@media (max-width: 1150px) {
+  .speaker__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    max-height: 240px;
+  }
+}
+
+/* Under 940px the ellipse can't hold eight boxes — fall back to a
+   list in the same compass order so index positions stay stable. */
+@media (max-width: 940px) {
+  .ring {
+    width: 100%;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .ring__lens {
+    display: none;
+  }
+
+  .slot {
+    position: static;
+    transform: none;
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    text-align: left;
+    min-height: 0;
+    padding: 0.7rem 1rem;
+  }
+
+  .slot[aria-selected="true"] {
+    transform: none;
+    background: rgba(159, 196, 232, 0.16);
+    border-color: rgba(159, 196, 232, 0.5);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(18px) saturate(180%);
+  }
+
+  .slot[data-enter="true"] {
+    animation: none;
+  }
+
+  .hub {
+    position: static;
+    transform: none;
+    width: 100%;
+    height: auto;
+    border-radius: var(--r-md);
+    padding: 0.7rem 1rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .stage__hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring__lens,
+  .slot,
+  .hub,
+  .hub__dir,
+  .utterance__text,
+  .trace__line {
+    animation: none !important;
+    transition: none !important;
+  }
+}

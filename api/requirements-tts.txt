@@ -1,0 +1,14 @@
+# Local text-to-speech (Kokoro), installed separately on purpose.
+#
+# These are NOT in requirements.txt because onnxruntime plus the 340MB
+# model files blow past Vercel's serverless function size limit and would
+# break the whole deployment. The API stays deployable on Vercel without
+# TTS; speech runs on the backend you run locally for the demo, which is
+# where the ESP32 posts to anyway.
+#
+#   pip install -r requirements-tts.txt
+#
+# Then fetch the model weights into api/models/ (see TTS-SETUP.md).
+
+kokoro-onnx
+soundfile
