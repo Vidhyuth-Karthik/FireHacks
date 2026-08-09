@@ -17,6 +17,7 @@
 
 import { WS_URL, API_BASE_URL, FORCE_MOCK } from './config.js';
 import { mountTargetCursor } from './target-cursor.js';
+import { mountBackgroundVideo } from './background.js';
 
 /* ---- Geometry -------------------------------------------- */
 /* Clockwise from top. A slot's position NEVER changes; each also owns
@@ -742,11 +743,7 @@ els.regenerate?.addEventListener('click', () => {
   regenerate();
 });
 
-const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-document.querySelectorAll('[data-bg-video]').forEach((v) => {
-  if (reduced) v.pause();
-  else v.play().catch(() => {});
-});
+mountBackgroundVideo();
 
 if (state.mock) {
   if (els.simBadge) els.simBadge.hidden = false;

@@ -108,6 +108,7 @@
   <script type="module">
     import { mountParticleText } from './particle-text.js';
     import { mountTargetCursor } from './target-cursor.js';
+    import { mountBackgroundVideo } from './background.js';
 
     const title = document.querySelector('[data-particle-title]');
     if (title) {
@@ -140,12 +141,9 @@
       cursorColorOnTarget: '#edb46a',
     });
 
-    // Some browsers still refuse the autoplay attribute; ask explicitly.
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    document.querySelectorAll('[data-bg-video]').forEach((v) => {
-      if (reduced) v.pause();
-      else v.play().catch(() => {});
-    });
+    // Keeps the ambient video running. Deliberately NOT gated on
+    // prefers-reduced-motion — see background.js for why.
+    mountBackgroundVideo();
   </script>
 
 </body>
