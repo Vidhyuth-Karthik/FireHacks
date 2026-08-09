@@ -7,7 +7,7 @@
 // session cookie is sent/received cross-origin. Once the API Space is
 // deployed, replace this with its https://*.hf.space URL.
 
-const API_BASE_URL = "https://hackathon-kits.vercel.app";
+const API_BASE_URL = "https://fire-hacks.vercel.app/";
 
 const messageEl = document.getElementById("message");
 
