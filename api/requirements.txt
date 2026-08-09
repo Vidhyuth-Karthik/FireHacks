@@ -2,4 +2,3 @@ fastapi
 uvicorn[standard]
 libsql
 python-dotenv
-httpx

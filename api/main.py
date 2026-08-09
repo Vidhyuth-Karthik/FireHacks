@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
-from routers import ai, auth, tts
+from routers import ai, auth
 
 app = FastAPI(title="Hackathon Starter Kit API")
 
@@ -51,5 +51,4 @@ def on_startup():
 # more features, e.g. app.include_router(chat.router).
 app.include_router(auth.router)
 app.include_router(ai.router)
-app.include_router(tts.router)
 #app.include_router(emp.router)
