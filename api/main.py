@@ -11,14 +11,25 @@
 # deployed separately as a Static Space.
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
-from routers import ai, auth, tts
+from routers import ai, auth, joystick, tts
 
-app = FastAPI(title="Hackathon Starter Kit API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create the database tables (if they don't exist yet) as soon as
+    # the app starts. (@app.on_event("startup") is deprecated.)
+    print("Initializing database...")
+    init_db()
+    yield
+
+
+app = FastAPI(title="Hackathon Starter Kit API", lifespan=lifespan)
 
 # The frontend now runs on a different origin (different port locally,
 # a different *.hf.space domain in production), so the browser enforces
@@ -39,17 +50,12 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-def on_startup():
-    # Create the database tables (if they don't exist yet) as soon as
-    # the app starts.
-    print("Initializing database...")
-    init_db()
-
-
 # Register routers here. Add new ones the same way as you build out
 # more features, e.g. app.include_router(chat.router).
 app.include_router(auth.router)
 app.include_router(ai.router)
 app.include_router(tts.router)
-#app.include_router(emp.router)
+
+# ESP32 joystick: POST /recive, plus the /ws feed the speaker page reads.
+# Run with --host 0.0.0.0 so the board can reach this over the LAN.
+app.include_router(joystick.router)

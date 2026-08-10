@@ -167,6 +167,27 @@
   left: 50%;
   transform: translateX(-50%);
   color: rgba(246, 230, 205, 0.45);
+  max-width: 70ch;
+  text-align: center;
+  transition: color 400ms var(--ease);
+}
+
+/* Reply wheel: the hint carries the sentence being answered, so it stops
+   being decoration and starts being the thing you read. */
+.stage__hint[data-reply="true"] {
+  color: var(--signal);
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+/* A refusal must never be mistaken for agreement under pressure — amber
+   marks it, and it always sits in slot 2. */
+.slot[data-intent="no"] .slot__key {
+  color: var(--ember-300);
+}
+
+.slot[data-intent="no"] {
+  border-color: rgba(224, 150, 74, 0.32);
 }
 
 /* ---- The ring -------------------------------------------- */
