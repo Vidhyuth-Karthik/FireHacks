@@ -54,6 +54,7 @@ const els = {
   regenerate: document.querySelector('[data-regenerate]'),
   micToggle: document.querySelector('[data-mic-toggle]'),
   micLabel: document.querySelector('[data-mic-label]'),
+  stageHint: document.querySelector('[data-stage-hint]'),
 };
 
 /* ---- State ----------------------------------------------- */
@@ -61,9 +62,10 @@ const state = {
   items: [], // normalised {short, full}
   highlight: 0,
   lastSpoken: '',
-  mock: FORCE_MOCK,
   socket: null,
   source: 'starting', // what actually produced the options on screen
+  mode: 'needs', // 'needs' while idle, 'reply' while the mic is listening
+  replyTo: '', // the utterance the current reply wheel answers
 
   // `heard` is overheard room speech, transcribed live from the mic —
   // context for the reasoning model, distinct from `recent` (what the
@@ -82,8 +84,21 @@ function partOfDay(d = new Date()) {
 /* Backend may send strings; normalise everything to {short, full}. */
 function normaliseItem(item) {
   if (!item) return null;
-  if (typeof item === 'string') return { short: item, full: item };
-  return { short: item.short ?? item.text ?? '', full: item.full ?? item.text ?? item.short ?? '' };
+  if (typeof item === 'string') return { short: item, full: item, intent: '' };
+  return {
+    short: item.short ?? item.text ?? '',
+    full: item.full ?? item.text ?? item.short ?? '',
+    intent: item.intent ?? '', // reply wheel only: yes/no/social/…
+  };
+}
+
+/* The line above the ring. Says what the wheel is currently for. */
+const STAGE_HINT_DEFAULT = 'Nudge to choose · press to speak';
+
+function setStageHint(text) {
+  if (!els.stageHint) return;
+  els.stageHint.textContent = text || STAGE_HINT_DEFAULT;
+  els.stageHint.dataset.reply = text ? 'true' : 'false';
 }
 
 /* ---- Status pills ---------------------------------------- */
@@ -119,6 +134,7 @@ function renderContext() {
   const rows = [
     ['Speaking as', state.context.name],
     ['Time', state.context.partOfDay],
+    ['Wheel', state.mode === 'reply' ? 'replies' : 'needs'],
     ['Source', state.source],
     ['Recent', state.context.recent.slice(-2).join(' · ') || '—'],
     ['Heard', state.context.heard.slice(-2).join(' · ') || '—'],
@@ -225,6 +241,8 @@ function renderOptions({ entering = false } = {}) {
     const item = state.items[index];
     el.querySelector('[data-text]').textContent = item ? item.short : '';
     el.dataset.empty = item ? 'false' : 'true';
+    // Lets refusals read differently from agreement at a glance.
+    el.dataset.intent = item?.intent || '';
     el.setAttribute('aria-selected', item && index === state.highlight ? 'true' : 'false');
 
     if (entering && item) {
@@ -401,6 +419,13 @@ function apiContext() {
   };
 }
 
+/* The trace used to say only "predicted 8 options", which makes a real
+   model response and the server's hardcoded fallback look identical.
+   List them. */
+function traceOptions(label, texts) {
+  trace(`${label}: ${texts.map((t, i) => `${i + 1}·${t}`).join('  ')}`, 'speak');
+}
+
 let predictSeq = 0;
 
 async function predictFromApi({ reason = 'context' } = {}) {
@@ -427,8 +452,11 @@ async function predictFromApi({ reason = 'context' } = {}) {
     if (!options.length) throw new Error('empty option set');
 
     state.source = data.source === 'model' ? `${data.model || 'model'}` : 'server fallback';
+    state.mode = 'needs';
     applyMessage({ state: 'options', items: options, highlight: 0 });
-    trace(`model returned ${options.length} options (${data.source})`, 'speak');
+    // Print what actually came back, not just how many — otherwise there's
+    // no way to tell a real prediction from the server's fallback list.
+    traceOptions(`needs (${data.source})`, options.map((o) => (o.short ?? o)));
     setPill('server', data.source === 'model' ? 'live' : 'degraded');
     // Only genuinely scripted output earns the SIMULATED badge.
     if (els.simBadge) els.simBadge.hidden = data.source === 'model';
@@ -446,6 +474,79 @@ async function predictFromApi({ reason = 'context' } = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/* ---- The reply wheel --------------------------------------
+   When someone speaks TO the user, the needs wheel is the wrong
+   question — "hello" has no slot among bathroom/food/pain. So while
+   the mic is listening the ring flips to replies generated from what
+   was actually heard, and flips back to needs when the mic goes off.
+
+   Same eight positions either way, so positional memory survives the
+   switch. Slot 2 is always a refusal (see RESPOND_SYSTEM). */
+
+let respondSeq = 0;
+
+async function respondFromApi(heardText) {
+  const seq = ++respondSeq;
+  setHub(null, 'Thinking', { thinking: true });
+  trace(`asking for replies to "${heardText}"…`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/ai/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ heard: heardText, context: apiContext() }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    if (seq !== respondSeq) return false; // superseded by newer speech
+
+    const replies = (data.replies || []).filter((r) => r && r.text);
+    if (!replies.length) throw new Error('empty reply set');
+
+    state.mode = 'reply';
+    state.replyTo = heardText;
+    state.source = data.source === 'model' ? `${data.model || 'model'} · reply` : 'server fallback · reply';
+
+    // Replies are already short enough to speak as-is, so short === full
+    // and pressing one skips the /expand round trip entirely.
+    applyMessage({
+      state: 'options',
+      items: replies.map((r) => ({ short: r.text, full: r.text, intent: r.intent })),
+      highlight: 0,
+    });
+
+    traceOptions(`replies (${data.source})`, replies.map((r) => r.text));
+    setPill('server', data.source === 'model' ? 'live' : 'degraded');
+    if (els.simBadge) els.simBadge.hidden = data.source === 'model';
+    setStageHint(`Replying to “${heardText}”`);
+    renderContext();
+    return true;
+  } catch (error) {
+    if (seq !== respondSeq) return false;
+    trace(`replies unavailable (${error.message})`, 'reject');
+    setPill('server', 'down');
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Back to the needs wheel — what the device shows when nobody is
+   talking to them. */
+function returnToNeeds() {
+  if (state.mode === 'needs') return;
+  state.mode = 'needs';
+  state.replyTo = '';
+  setStageHint(null);
+  trace('back to the needs wheel');
+  predictFromApi({ reason: 'mic off' });
 }
 
 /* ---- Microphone -------------------------------------------
@@ -479,15 +580,22 @@ const mic = new MicSession({
     setHub(null, 'Listening');
     if (els.micLabel) els.micLabel.textContent = 'Mic on';
 
-    // Feed it to the model, debounced so a long sentence is one request.
+    // Someone is talking to them — offer replies, not needs. Debounced so
+    // a long sentence becomes one request rather than one per clause.
     clearTimeout(repredictTimer);
-    repredictTimer = setTimeout(() => predictFromApi({ reason: 'heard speech' }), REPREDICT_DELAY);
+    repredictTimer = setTimeout(() => respondFromApi(text), REPREDICT_DELAY);
   },
 
   onStateChange: (listening) => {
     setMicPill(listening ? 'live' : 'down', listening ? 'Mic on' : 'Mic off');
     if (els.micToggle) els.micToggle.setAttribute('aria-pressed', String(listening));
-    if (listening) setHub(null, 'Listening');
+    if (listening) {
+      setHub(null, 'Listening');
+    } else {
+      // Mic off — nobody is talking to them, so go back to needs.
+      clearTimeout(repredictTimer);
+      returnToNeeds();
+    }
   },
 
   onStatus: (message) => trace(`mic: ${message}`),
@@ -513,6 +621,15 @@ async function toggleMic() {
   }
   setMicPill('degraded', 'Starting…');
   await mic.start();
+}
+
+/* The board posts once a second. If three of those go missing the pill
+   drops back to dim, so an unplugged ESP32 is visible on stage. */
+let deviceTimer = null;
+function markDeviceAlive() {
+  setPill('device', 'live');
+  clearTimeout(deviceTimer);
+  deviceTimer = setTimeout(() => setPill('device', 'down'), 3500);
 }
 
 /* ---- Backend messages ------------------------------------ */
@@ -550,6 +667,19 @@ function applyMessage(msg) {
       setHub('·', 'Idle');
       break;
 
+    // A joystick gesture, already debounced by the backend. The browser
+    // decides what it means — see handleDirection.
+    case 'input':
+      markDeviceAlive();
+      handleDirection(msg.dir, { direct: true }); // real 8-way hardware
+      break;
+
+    // Heartbeat: the board posted, whether or not it moved. This is what
+    // keeps the DEVICE pill honest while the stick sits at centre.
+    case 'device':
+      markDeviceAlive();
+      break;
+
     case 'context':
       Object.assign(state.context, msg.context || msg);
       renderContext();
@@ -566,21 +696,29 @@ function applyMessage(msg) {
   }
 }
 
-/* ---- WebSocket ------------------------------------------- */
+/* ---- WebSocket -------------------------------------------
+   The socket carries ONE thing now: joystick gestures from the ESP32
+   (see api/routers/joystick.py). Options, speech and the wheel logic all
+   live in this file, so losing the socket costs the hardware input and
+   nothing else — the keyboard path still completes the whole demo.
+
+   Keeps retrying quietly: the board and the laptop come up in whatever
+   order they come up in. */
+
 let reconnectAttempts = 0;
+const RECONNECT_CEILING = 15000;
 
 function connect() {
-  if (state.mock) return;
+  if (FORCE_MOCK) return;
 
   let socket;
   try {
     socket = new WebSocket(WS_URL);
   } catch {
-    return enterMock('socket construction failed');
+    return scheduleReconnect('socket construction failed');
   }
 
   state.socket = socket;
-  setPill('server', 'degraded');
 
   const failTimer = setTimeout(() => {
     if (socket.readyState !== WebSocket.OPEN) socket.close();
@@ -589,11 +727,7 @@ function connect() {
   socket.addEventListener('open', () => {
     clearTimeout(failTimer);
     reconnectAttempts = 0;
-    setPill('server', 'live');
-    setPill('device', 'live'); // the backend is the device's only route in
-    state.source = 'live backend';
-    renderContext();
-    trace(`connected to ${WS_URL}`);
+    trace(`joystick feed connected (${WS_URL})`);
   });
 
   socket.addEventListener('message', (event) => {
@@ -606,27 +740,22 @@ function connect() {
 
   socket.addEventListener('close', () => {
     clearTimeout(failTimer);
-    setPill('server', 'down');
+    state.socket = null;
     setPill('device', 'down');
-    reconnectAttempts += 1;
-    if (reconnectAttempts >= 2) enterMock('backend unreachable');
-    else setTimeout(connect, 1200);
+    scheduleReconnect();
   });
 
   socket.addEventListener('error', () => socket.close());
 }
 
-/* No socket. The browser drives itself from here on — but it still asks
-   the real model over REST, which is the path that works on Vercel. The
-   scripted set is only reached if that fails too. */
-function enterMock(reason) {
-  if (state.mock) return;
-  state.mock = true;
-  state.socket = null;
-  setPill('device', 'down');
-  trace(`${reason} — driving from the browser`, 'reject');
-  renderContext();
-  predictFromApi({ reason: 'startup' });
+/* Backs off to 15s so a demo with no hardware isn't spamming the console
+   all afternoon, but still reconnects on its own when the board appears. */
+function scheduleReconnect(reason) {
+  if (reason) trace(`${reason}`, 'reject');
+  if (reconnectAttempts === 1) trace('no joystick feed — keyboard still works');
+  reconnectAttempts += 1;
+  const delay = Math.min(1200 * reconnectAttempts, RECONNECT_CEILING);
+  setTimeout(connect, delay);
 }
 
 /* ---- Local scripted agent -------------------------------- */
@@ -745,6 +874,13 @@ function mockPredict() {
    this sits on the press-to-speak path where model latency would be heard
    as silence. */
 async function expandAndSpeak(item) {
+  // Replies are already complete utterances. Running "Hello" through
+  // /expand would produce "I'd like hello, please." — say it as written.
+  if (state.mode === 'reply') {
+    applyMessage({ state: 'speak', text: item.short, short: item.short });
+    return;
+  }
+
   if (item.full && item.full !== item.short) {
     applyMessage({ state: 'expanding' });
     setTimeout(() => applyMessage({ state: 'speak', text: item.full, short: item.short }), 480);
@@ -781,8 +917,9 @@ function select() {
   if (!choice) return;
   setHub(null, 'Selected', { pulse: true });
   trace(`selected "${choice.short}"`);
-  if (state.mock) expandAndSpeak(choice);
-  // Live mode: the backend owns the transition; the ESP32 press told it already.
+  // The browser owns the wheel in every mode now: the backend relays
+  // joystick gestures but has no idea what's on the ring.
+  expandAndSpeak(choice);
 }
 
 function regenerate() {
@@ -796,29 +933,40 @@ function regenerate() {
     if (state.context.rejected.length > 6) state.context.rejected.shift();
   }
 
-  if (state.mock) {
+  // Re-ask in whichever wheel is on screen, or the regenerate would
+  // silently drop the user back to needs mid-conversation.
+  if (state.mode === 'reply' && state.replyTo) {
+    respondFromApi(state.replyTo);
+  } else {
     mockVariant += 1;
     predictFromApi({ reason: 'rejected' });
-  } else {
-    postInput('left');
   }
 }
 
-/* Only used when a backend is live and we drive it from the browser —
-   the ESP32 posts to this same endpoint. Best-effort. */
-function postInput(dir) {
-  if (state.mock) return;
-  fetch(`${API_BASE_URL}/input`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir }),
-  }).catch(() => trace(`could not POST /input (${dir})`, 'reject'));
-}
+/* Direction semantics, and they differ by input device on purpose.
 
-/* Direction semantics under the frozen 4-way contract, plus direct
-   8-way jumps if firmware starts sending diagonals. */
-function handleDirection(dir) {
+   The joystick has eight physical positions, so all eight jump straight
+   to the matching slot — that IS the ring's promise (UI-SPEC §4.2: the
+   screen layout is the input topology). With every direction spoken for,
+   "not what I meant" becomes a double-press, which the backend detects.
+
+   A keyboard only has four arrows, so it keeps the original stepping
+   contract and regenerates with R. */
+function handleDirection(dir, { direct = false } = {}) {
   setHub(SLOTS[DIR_INDEX.get(dir)]?.glyph || '·', null, { pulse: dir === 'press' });
+
+  if (dir === 'press') return select();
+  if (dir === 'regenerate') return regenerate();
+
+  const index = DIR_INDEX.get(dir);
+
+  if (direct) {
+    if (index !== undefined) {
+      setHighlight(index);
+      setHub(SLOTS[index].glyph, 'Choosing');
+    }
+    return;
+  }
 
   switch (dir) {
     case 'up':
@@ -831,13 +979,8 @@ function handleDirection(dir) {
     case 'left':
       regenerate();
       break;
-    case 'press':
-      select();
-      break;
-    default: {
-      const index = DIR_INDEX.get(dir);
+    default:
       if (index !== undefined) setHighlight(index);
-    }
   }
 }
 
@@ -855,7 +998,6 @@ function onKey(event) {
 
   if (keyMap[event.key]) {
     event.preventDefault();
-    if (!state.mock) postInput(keyMap[event.key]);
     handleDirection(keyMap[event.key]);
     return;
   }
@@ -939,10 +1081,12 @@ els.micToggle?.addEventListener('click', toggleMic);
 
 mountBackgroundVideo();
 
-if (state.mock) {
-  trace('socket skipped via ?mock=1');
-  predictFromApi({ reason: 'startup' });
+/* The wheel fills from REST immediately — it never waits on the socket,
+   because the joystick is an input device, not the source of options. */
+predictFromApi({ reason: 'startup' });
+
+if (FORCE_MOCK) {
+  trace('joystick feed skipped via ?mock=1');
 } else {
-  trace(`connecting to ${WS_URL}`);
   connect();
 }

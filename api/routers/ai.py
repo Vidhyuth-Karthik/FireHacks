@@ -41,6 +41,10 @@ AZURE_OPENAI_TIMEOUT = float(os.environ.get("AZURE_OPENAI_TIMEOUT", "90"))
 
 OPTION_COUNT = 8
 
+# Replies live on the same 8-slot ring, so a user keeps their positional
+# memory when the wheel flips from needs to replies.
+VALID_INTENTS = {"need", "yes", "no", "feeling", "social", "question"}
+
 
 # ---- Fallback ------------------------------------------------------
 # If the key is missing or the model is slow/down, the demo must still
@@ -83,6 +87,13 @@ class Context(BaseModel):
 
 
 class PredictRequest(BaseModel):
+    context: Context = Context()
+
+
+class RespondRequest(BaseModel):
+    """What the other person just said, to be answered."""
+
+    heard: str
     context: Context = Context()
 
 
@@ -229,6 +240,41 @@ Turn their chosen short intent into ONE natural, polite, dignified sentence
 in their own voice. First person. Under 20 words. No preamble.
 Reply with ONLY the sentence in double quotes."""
 
+# Someone has spoken TO the user; these are answers, not needs. Same eight
+# slots as the needs wheel so positional memory survives the switch.
+RESPOND_SYSTEM = f"""You are the prediction engine inside a communication aid used
+by a person who cannot speak easily. Someone has just spoken TO them. Offer the
+{OPTION_COUNT} things the USER is most likely to want to say BACK, right now.
+
+Write in FIRST PERSON, as the user. Each reply is 1-5 words, plain and dignified.
+Answer what was actually said - if they were greeted, greet back; if asked a
+question, answer it.
+
+Return ONLY a JSON array of exactly {OPTION_COUNT} objects, in this fixed order:
+1 agree or say yes, 2 decline or say no, 3 a greeting or social reply,
+4 how they are feeling, 5 a question back, 6 a request or need,
+7 ask them to repeat or say you don't understand, 8 a closing or thank you.
+
+Each object is {{"text": "...", "intent": "..."}} where intent is one of:
+need, yes, no, feeling, social, question.
+
+Slot 2 must ALWAYS be a genuine way to refuse - the ability to say no matters
+for this person's safety and dignity.
+
+No markdown, no prose outside the JSON array."""
+
+
+FALLBACK_REPLIES = [
+    {"text": "Yes, please", "intent": "yes"},
+    {"text": "No, thank you", "intent": "no"},
+    {"text": "Hello", "intent": "social"},
+    {"text": "I'm alright", "intent": "feeling"},
+    {"text": "How are you?", "intent": "question"},
+    {"text": "I need help", "intent": "need"},
+    {"text": "Say that again?", "intent": "question"},
+    {"text": "Thank you", "intent": "social"},
+]
+
 
 def temp_word(fahrenheit: Optional[float]) -> str:
     if fahrenheit is None:
@@ -322,6 +368,77 @@ async def predict(request: PredictRequest):
             options.append(candidate)
 
     return {"options": options, "source": "model", "model": AZURE_OPENAI_DEPLOYMENT}
+
+
+def normalise_reply(item) -> Optional[dict]:
+    """Accept {"text","intent"} or a bare string; return a clean reply dict."""
+    if isinstance(item, str):
+        text, intent = item.strip(), "social"
+    elif isinstance(item, dict):
+        text = str(item.get("text") or item.get("short") or "").strip()
+        intent = str(item.get("intent") or "social").strip().lower()
+    else:
+        return None
+
+    if not text:
+        return None
+    if intent not in VALID_INTENTS:
+        intent = "social"
+    return {"text": text, "intent": intent}
+
+
+@router.post("/respond")
+async def respond(request: RespondRequest):
+    """The 8 things this person might want to say BACK to what they just heard.
+
+    Separate from /predict because the two answer different questions: /predict
+    asks "what might they need?", this asks "what might they reply?". A greeting
+    has nowhere to go on the needs wheel.
+    """
+    heard = request.heard.strip()
+    if not heard:
+        raise HTTPException(status_code=400, detail="heard is required")
+
+    user_message = (
+        f"{build_context_line(request.context)}\n"
+        f"The other person just said: \"{heard}\"\n"
+        f"Give the {OPTION_COUNT} replies now."
+    )
+
+    try:
+        raw = await chat(RESPOND_SYSTEM, user_message, max_tokens=900)
+        parsed = extract_json_array(raw)
+    except HTTPException:
+        parsed = None
+
+    replies = []
+    for item in parsed or []:
+        reply = normalise_reply(item)
+        if reply:
+            replies.append(reply)
+    replies = replies[:OPTION_COUNT]
+
+    if not replies:
+        return {
+            "replies": FALLBACK_REPLIES,
+            "heard": heard,
+            "source": "fallback",
+            "model": AZURE_OPENAI_DEPLOYMENT,
+        }
+
+    # Keep all eight slots filled so the ring never has holes.
+    for filler in FALLBACK_REPLIES:
+        if len(replies) >= OPTION_COUNT:
+            break
+        if all(r["text"].lower() != filler["text"].lower() for r in replies):
+            replies.append(filler)
+
+    return {
+        "replies": replies,
+        "heard": heard,
+        "source": "model",
+        "model": AZURE_OPENAI_DEPLOYMENT,
+    }
 
 
 @router.post("/expand")
